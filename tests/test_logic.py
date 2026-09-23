@@ -60,6 +60,7 @@ class LogicTest(unittest.TestCase):
         self.assertEqual(body["received"], 2)
         self.assertEqual(body["skipped"], 1)
         self.assertEqual(body["series"]["temp"], [[0.5, 1.0]])
+        self.assertEqual(body["last_message"], "2026-09-25T00:00:00+02:00")
 
         days = self.client.get("/api/days").get_json()["days"]
         self.assertEqual(days, ["2026-09-24", "2026-09-25"])
@@ -76,6 +77,7 @@ class LogicTest(unittest.TestCase):
         empty = self.client.get("/api/data?date=2026-01-16").get_json()
         self.assertEqual(empty["received"], 0)
         self.assertEqual(empty["series"], {})
+        self.assertEqual(empty["last_message"], "2026-01-15T00:30:00+01:00")
 
     def test_bad_date(self):
         self.assertEqual(self.client.get("/api/data?date=yesterday").status_code, 400)

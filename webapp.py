@@ -91,6 +91,13 @@ def local_hour(ts_utc, day_start):
     return (moment - day_start).total_seconds() / 3600.0
 
 
+def latest_message_iso(conn):
+    row = conn.execute("SELECT MAX(ts_utc) FROM messages").fetchone()
+    if not row or row[0] is None:
+        return None
+    return parse_utc(row[0]).astimezone(TZ).isoformat(timespec="seconds")
+
+
 def list_days(conn):
     row = conn.execute("SELECT MIN(ts_utc), MAX(ts_utc) FROM messages").fetchone()
     if row[0] is None:
@@ -174,6 +181,7 @@ def data():
         "received": 0,
         "skipped": 0,
         "series": {},
+        "last_message": None,
     }
     conn = open_db()
     if conn is None:
@@ -183,6 +191,7 @@ def data():
         body["received"] = received
         body["skipped"] = skipped
         body["series"] = series
+        body["last_message"] = latest_message_iso(conn)
         return jsonify(body)
     finally:
         conn.close()

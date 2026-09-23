@@ -15,7 +15,19 @@
       color: #1a1a1a;
       background: #f6f7f9;
     }
-    h1 { font-size: 1.4rem; margin: 0 0 12px; }
+    .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
+    h1 { font-size: 1.4rem; margin: 0; }
+    .live { display: flex; align-items: center; gap: 8px; margin: 0; font-variant-numeric: tabular-nums; }
+    .led {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+    }
+    .led.green { color: #1f9d3a; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #1f9d3a; }
+    .led.yellow { color: #e0a100; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #e0a100; }
+    .led.red { color: #d1242f; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #d1242f; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
     button, input[type="date"] {
       font: inherit;
@@ -49,7 +61,10 @@
   </style>
 </head>
 <body>
-  <h1>CloudWatcher</h1>
+  <div class="top">
+    <h1>CloudWatcher</h1>
+    <p class="live"><span id="led" class="led red" aria-hidden="true"></span><span id="last-message">keine Nachricht</span></p>
+  </div>
   <div class="toolbar">
     <button type="button" id="prev">Vortag</button>
     <input type="date" id="date" aria-label="Datum">
@@ -172,6 +187,7 @@
         };
       });
       if (!visibleGroups.length) {
+        chartSignature = "";
         var empty = document.createElement("p");
         empty.className = "empty";
         empty.textContent = "Keine Felder ausgewählt.";
@@ -235,6 +251,7 @@
           }
         }));
       });
+      chartSignature = signatureFor(series, hidden);
     }
 
     function setStatus(text) {
@@ -242,12 +259,79 @@
     }
 
     var currentSeries = {};
+    var chartSignature = "";
+    var lastMessageAt = null;
+
+    function paintLed() {
+      var led = document.getElementById("led");
+      var label = document.getElementById("last-message");
+      if (lastMessageAt == null || isNaN(lastMessageAt)) {
+        led.className = "led red";
+        label.textContent = "keine Nachricht";
+        return;
+      }
+      var age = Date.now() - lastMessageAt;
+      var state = age < 60000 ? "green" : age < 120000 ? "yellow" : "red";
+      led.className = "led " + state;
+      label.textContent = new Intl.DateTimeFormat("de-DE", {
+        timeZone: "Europe/Berlin",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }).format(new Date(lastMessageAt));
+    }
+
+    function visibleGroups(series, hidden) {
+      return chartGroups(series).filter(function (group) {
+        return group.fields.some(function (name) { return !hidden.has(name); });
+      }).map(function (group) {
+        return {
+          title: group.title,
+          fields: group.fields.filter(function (name) { return !hidden.has(name); })
+        };
+      });
+    }
+
+    function signatureFor(series, hidden) {
+      return visibleGroups(series, hidden).map(function (group) {
+        return group.title + "=" + group.fields.join(",");
+      }).join("|");
+    }
+
+    function axisMax(series) {
+      var maxX = 24;
+      Object.keys(series).forEach(function (name) {
+        series[name].forEach(function (point) {
+          if (point[0] > maxX) maxX = Math.ceil(point[0]);
+        });
+      });
+      return maxX;
+    }
+
+    function updateCharts(series, hidden) {
+      var groups = visibleGroups(series, hidden);
+      var maxX = axisMax(series);
+      groups.forEach(function (group, index) {
+        var chart = charts[index];
+        group.fields.forEach(function (name, fieldIndex) {
+          chart.data.datasets[fieldIndex].data = withGaps(series[name]);
+        });
+        chart.options.scales.x.max = maxX;
+        chart.update();
+      });
+    }
 
     function showPayload(payload) {
       var names = Object.keys(payload.series).sort();
       var hidden = hiddenSet();
       currentSeries = payload.series;
+      if (payload.last_message) lastMessageAt = Date.parse(payload.last_message);
+      paintLed();
       if (payload.received === 0) {
+        chartSignature = "";
         document.getElementById("fields").textContent = "";
         destroyCharts();
         var root = document.getElementById("charts");
@@ -263,6 +347,7 @@
       if (payload.skipped) status += ", " + payload.skipped + " nicht lesbar";
       setStatus(status);
       if (!names.length) {
+        chartSignature = "";
         document.getElementById("fields").textContent = "";
         destroyCharts();
         var box = document.getElementById("charts");
@@ -273,20 +358,31 @@
         box.appendChild(note);
         return;
       }
+      var signature = signatureFor(payload.series, hidden);
+      if (signature && signature === chartSignature && charts.length) {
+        updateCharts(payload.series, hidden);
+        return;
+      }
       renderFields(names, hidden, function () { renderCharts(currentSeries, hidden); });
       renderCharts(payload.series, hidden);
+      chartSignature = signatureFor(currentSeries, hidden);
     }
 
-    function load(date) {
+    function load(date, quiet) {
       document.getElementById("date").value = date;
-      setStatus("Laden …");
+      if (!quiet) setStatus("Laden …");
       fetch("/api/data?date=" + encodeURIComponent(date))
         .then(function (response) {
           if (!response.ok) throw new Error("Abfrage fehlgeschlagen (" + response.status + ")");
           return response.json();
         })
-        .then(showPayload)
-        .catch(function (err) { setStatus(err.message); });
+        .then(function (payload) {
+          if (document.getElementById("date").value !== date) return;
+          showPayload(payload);
+        })
+        .catch(function (err) {
+          if (document.getElementById("date").value === date) setStatus(err.message);
+        });
     }
 
     document.getElementById("prev").addEventListener("click", function () {
@@ -303,6 +399,12 @@
     });
 
     load(todayBerlin());
+    paintLed();
+    setInterval(paintLed, 1000);
+    setInterval(function () {
+      var date = document.getElementById("date").value;
+      if (date) load(date, true);
+    }, 15000);
   </script>
 </body>
 </html>
