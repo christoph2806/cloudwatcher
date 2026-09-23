@@ -1,0 +1,5 @@
+user solo
+topic write sternwarte/cloudwatcher/#
+
+user collector
+topic read sternwarte/#

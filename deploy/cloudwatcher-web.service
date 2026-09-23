@@ -1,0 +1,17 @@
+[Unit]
+Description=CloudWatcher web UI
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cloudwatcher
+Group=cloudwatcher
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/cloudwatcher/web.env
+ExecStart=/opt/cloudwatcher/venv/bin/python /opt/cloudwatcher/webapp.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
