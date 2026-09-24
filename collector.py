@@ -70,7 +70,7 @@ def run():
     port = int(os.environ.get("MQTT_PORT", "1883"))
     user = os.environ.get("MQTT_USER", "collector")
     password = os.environ.get("MQTT_PASSWORD", "")
-    topic = os.environ.get("MQTT_TOPIC", "sternwarte/cloudwatcher/#")
+    topic = os.environ.get("MQTT_TOPIC", "cloudwatcher/#")
     if not password:
         log.error("MQTT_PASSWORD is not set")
         return 1

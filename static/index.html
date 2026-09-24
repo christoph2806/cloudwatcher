@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CloudWatcher</title>
+  <title data-i18n="pageCharts">CloudWatcher</title>
   <script src="/static/chart.umd.min.js"></script>
   <style>
     :root { color-scheme: light; }
@@ -28,20 +28,30 @@
     .led.green { color: #1f9d3a; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #1f9d3a; }
     .led.yellow { color: #e0a100; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #e0a100; }
     .led.red { color: #d1242f; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #d1242f; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .led.off { color: #c5c9d1; box-shadow: none; }
+    .flags { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+    .binary-track { position: relative; height: 22px; background: #e7eaee; border-radius: 6px; overflow: hidden; }
+    .binary-track .seg { position: absolute; top: 0; bottom: 0; }
+    .binary-track .seg.on { background: #1f9d3a; }
+    .binary-track .seg.off { background: #d1242f; }
+    .binary-axis { display: flex; justify-content: space-between; margin-top: 4px; color: #667; font-size: 12px; }
+    .reading.on { color: #1f9d3a; }
+    .reading.off { color: #d1242f; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
     button, input[type="date"] {
+      box-sizing: border-box;
       font: inherit;
       font-size: 16px;
-      min-height: 44px;
-      padding: 8px 12px;
+      height: 44px;
+      padding: 0 12px;
       border: 1px solid #c5c9d1;
       border-radius: 8px;
       background: #fff;
     }
     button { cursor: pointer; }
-    #status { min-height: 1.4em; margin: 12px 0; }
-    #fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
-    #fields label { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+    .count { margin: 0; font-variant-numeric: tabular-nums; }
+    #status { margin: 0 0 12px; }
+    #status:empty { display: none; }
     .chart-card {
       background: #fff;
       border: 1px solid #e1e4ea;
@@ -49,7 +59,44 @@
       padding: 12px;
       margin-bottom: 12px;
     }
-    .chart-card h2 { font-size: 1rem; margin: 0 0 8px; font-weight: 600; }
+    .chart-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .chart-head h2 { font-size: 1rem; margin: 0; font-weight: 600; flex: 1; }
+    button.info {
+      width: 18px;
+      height: 18px;
+      min-height: 0;
+      margin-left: 6px;
+      padding: 0;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 16px;
+      color: #1f4e79;
+      vertical-align: 1px;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    .modal[hidden] { display: none; }
+    .modal-card {
+      width: min(32rem, 100%);
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .modal-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .modal-card p { margin: 0 0 16px; line-height: 1.45; }
+    .reading { font-weight: 500; color: #1f4e79; margin-left: 8px; }
+    .order { display: flex; gap: 4px; margin-left: auto; }
+    .order button { height: 36px; min-width: 40px; padding: 0 8px; }
+    a.nav { align-self: center; }
     .chart-box { position: relative; height: 220px; }
     .empty {
       background: #fff;
@@ -63,23 +110,38 @@
 <body>
   <div class="top">
     <h1>CloudWatcher</h1>
-    <p class="live"><span id="led" class="led red" aria-hidden="true"></span><span id="last-message">keine Nachricht</span></p>
+    <div class="flags">
+      <p class="count" id="count"></p>
+      <p class="live"><span id="led-safe" class="led off" aria-hidden="true"></span><span id="text-safe" data-i18n="safeUnknown">Safe —</span></p>
+      <p class="live"><span id="led-switch" class="led off" aria-hidden="true"></span><span id="text-switch" data-i18n="switchUnknown">Switch —</span></p>
+      <p class="live"><span id="led" class="led red" aria-hidden="true"></span><span id="last-message" data-i18n="noMessage">no message</span></p>
+    </div>
   </div>
   <div class="toolbar">
-    <button type="button" id="prev">Vortag</button>
-    <input type="date" id="date" aria-label="Datum">
-    <button type="button" id="today">Heute</button>
-    <button type="button" id="next">Folgetag</button>
+    <button type="button" id="prev" data-i18n="prev">Previous day</button>
+    <input type="date" id="date" data-i18n-aria="date" aria-label="Date">
+    <button type="button" id="today" data-i18n="today">Today</button>
+    <a class="nav" href="/config" data-i18n="settings">Settings</a>
   </div>
   <p id="status"></p>
-  <div id="fields"></div>
   <main id="charts"></main>
+  <div id="info-modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="info-title">
+      <h2 id="info-title"></h2>
+      <p id="info-body"></p>
+      <button type="button" id="info-close" data-i18n="close">Close</button>
+    </div>
+  </div>
+  <script src="/static/i18n.js"></script>
   <script>
+    applyI18n();
     // Combine fields into one chart once a sample message documents the schema.
-    var FIELD_GROUPS = [];
+    var FIELD_GROUPS = [{ title: "Wind", fields: ["wind", "gust"] }];
     var COLORS = ["#1f4e79", "#c45911", "#548235", "#7030a0", "#1a6b7a"];
     var HIDDEN_KEY = "cloudwatcher-hidden-fields";
     var charts = [];
+    var settings = { order: [], limits: {} };
+    var lastPayload = null;
 
     function todayBerlin() {
       return new Intl.DateTimeFormat("en-CA", {
@@ -105,10 +167,6 @@
       }
     }
 
-    function saveHidden(hidden) {
-      localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hidden)));
-    }
-
     function formatHour(h) {
       if (h == null || isNaN(h)) return "";
       var totalMin = Math.round(h * 60);
@@ -132,12 +190,87 @@
     }
 
     function destroyCharts() {
-      charts.forEach(function (chart) { chart.destroy(); });
+      charts.forEach(function (chart) { if (chart) chart.destroy(); });
       charts = [];
     }
 
+    function isBinary(name) {
+      return name === "safe" || name === "switch";
+    }
+
+    function stateWord(name, value) {
+      var on = value >= 0.5;
+      if (name === "safe") return on ? t("safeOn") : t("safeOff");
+      if (name === "switch") return on ? t("switchOn") : t("switchOff");
+      return on ? "1" : "0";
+    }
+
+    function binaryRuns(points) {
+      var runs = [];
+      if (!points || !points.length) return runs;
+      var gap = 2 / 60;
+      var start = points[0][0];
+      var bit = points[0][1] >= 0.5 ? 1 : 0;
+      var prev = start;
+      for (var i = 1; i < points.length; i++) {
+        var hour = points[i][0];
+        var next = points[i][1] >= 0.5 ? 1 : 0;
+        if (hour - prev > gap) {
+          runs.push({ start: start, end: prev, value: bit });
+          start = hour;
+          bit = next;
+        } else if (next !== bit) {
+          runs.push({ start: start, end: hour, value: bit });
+          start = hour;
+          bit = next;
+        }
+        prev = hour;
+      }
+      runs.push({ start: start, end: prev, value: bit });
+      return runs;
+    }
+
+    function fillBinary(track, points) {
+      track.textContent = "";
+      binaryRuns(points).forEach(function (run) {
+        var end = run.end <= run.start ? Math.min(24, run.start + 0.15) : run.end;
+        var seg = document.createElement("div");
+        seg.className = "seg " + (run.value ? "on" : "off");
+        seg.style.left = (run.start / 24 * 100) + "%";
+        seg.style.width = (Math.max(0, end - run.start) / 24 * 100) + "%";
+        track.appendChild(seg);
+      });
+    }
+
+    function paintFlags(series) {
+      [["safe", "Safe", "led-safe", "text-safe"], ["switch", "Switch", "led-switch", "text-switch"]].forEach(function (spec) {
+        var led = document.getElementById(spec[2]);
+        var label = document.getElementById(spec[3]);
+        var value = series ? lastReading(series[spec[0]]) : null;
+        if (value == null || isNaN(value)) {
+          led.className = "led off";
+          label.textContent = t(spec[0] + "Unknown");
+          return;
+        }
+        var on = value >= 0.5;
+        led.className = "led " + (on ? "green" : "red");
+        label.textContent = fieldTitle(spec[0], spec[1]) + " " + stateWord(spec[0], value);
+      });
+    }
+
+    function orderedNames(names) {
+      var rank = {};
+      (settings.order || []).forEach(function (name, index) { rank[name] = index; });
+      return names.slice().sort(function (a, b) {
+        var ra = Object.prototype.hasOwnProperty.call(rank, a) ? rank[a] : 10000;
+        var rb = Object.prototype.hasOwnProperty.call(rank, b) ? rank[b] : 10000;
+        if (ra !== rb) return ra - rb;
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+    }
+
     function chartGroups(series) {
-      var keys = Object.keys(series).sort();
+      var keys = orderedNames(Object.keys(series));
       var used = {};
       var groups = [];
       FIELD_GROUPS.forEach(function (group) {
@@ -151,26 +284,104 @@
       keys.forEach(function (name) {
         if (!used[name]) groups.push({ title: name, fields: [name] });
       });
+      var rank = {};
+      var source = settings.order && settings.order.length ? settings.order : keys;
+      source.forEach(function (name, index) { rank[name] = index; });
+      function groupRank(group) {
+        var best = 10000;
+        group.fields.forEach(function (name) {
+          if (Object.prototype.hasOwnProperty.call(rank, name) && rank[name] < best) best = rank[name];
+        });
+        return best;
+      }
+      groups.sort(function (a, b) { return groupRank(a) - groupRank(b); });
       return groups;
     }
 
-    function renderFields(names, hidden, onChange) {
-      var box = document.getElementById("fields");
-      box.textContent = "";
-      names.forEach(function (name) {
-        var label = document.createElement("label");
-        var input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = !hidden.has(name);
-        input.addEventListener("change", function () {
-          if (input.checked) hidden.delete(name);
-          else hidden.add(name);
-          saveHidden(hidden);
-          onChange();
+    function formatReading(value) {
+      if (value == null || isNaN(value)) return "";
+      var abs = Math.abs(value);
+      var digits = abs >= 100 ? 0 : abs >= 10 ? 1 : 2;
+      return value.toFixed(digits);
+    }
+
+    function lastReading(points) {
+      if (!points || !points.length) return null;
+      return points[points.length - 1][1];
+    }
+
+    function fieldSpec(name) {
+      var spec = (settings.limits || {})[name] || {};
+      var lines = (spec.lines || []).filter(function (line) {
+        return line.value != null && line.value !== "" && isFinite(Number(line.value));
+      }).map(function (line) {
+        return { id: line.id, label: line.label, value: Number(line.value), color: line.color || "#666" };
+      });
+      var ymax = spec.ymax == null || spec.ymax === "" ? null : Number(spec.ymax);
+      if (ymax != null && !isFinite(ymax)) ymax = null;
+      return { lines: lines, ymax: ymax, unit: spec.unit || "" };
+    }
+
+    function visibleLimit(points, spec) {
+      var ys = [];
+      (points || []).forEach(function (point) {
+        if (point[1] != null && isFinite(point[1])) ys.push(point[1]);
+      });
+      if (!ys.length) return { lines: [], min: undefined, max: undefined };
+      var dataMin = Math.min.apply(null, ys);
+      var dataMax = Math.max.apply(null, ys);
+      var span = Math.max(dataMax - dataMin, 1);
+      var pad = Math.max(span * 8, 50, Math.abs(dataMax) * 0.2);
+      var lo = dataMin;
+      var hi = dataMax;
+      var kept;
+      if (spec.ymax != null) {
+        hi = spec.ymax;
+        lo = Math.min(dataMin, 0);
+        kept = spec.lines.filter(function (line) {
+          return line.value >= lo && line.value <= hi;
         });
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(name));
-        box.appendChild(label);
+      } else {
+        kept = spec.lines.filter(function (line) {
+          return line.value >= dataMin - pad && line.value <= dataMax + pad;
+        });
+        kept.forEach(function (line) {
+          lo = Math.min(lo, line.value);
+          hi = Math.max(hi, line.value);
+        });
+      }
+      var extra = Math.max((hi - lo) * 0.06, 0.5);
+      return { lines: kept, min: lo - extra, max: spec.ymax != null ? spec.ymax : hi + extra };
+    }
+
+    function readingText(group, series) {
+      return group.fields.map(function (name) {
+        var value = lastReading(series[name]);
+        if (value == null || isNaN(value)) return "";
+        if (isBinary(name)) return stateWord(name, value);
+        var text = formatReading(value);
+        var unit = fieldSpec(name).unit;
+        var prefix = "";
+        if (group.fields.length > 1) {
+          prefix = name === "gust" ? fieldTitle("gust", "Gusts") + " " : name === "wind" ? "" : fieldTitle(name, name) + " ";
+        }
+        return prefix + text + (unit ? " " + unit : "");
+      }).filter(Boolean).join(" · ");
+    }
+
+    function limitDatasets(field, lines, maxX) {
+      return lines.map(function (line) {
+        return {
+          label: limitName(field, line.id, line.label),
+          data: [{ x: 0, y: line.value }, { x: maxX, y: line.value }],
+          borderColor: line.color,
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          spanGaps: true,
+          tension: 0,
+          order: 2
+        };
       });
     }
 
@@ -190,7 +401,7 @@
         chartSignature = "";
         var empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = "Keine Felder ausgewählt.";
+        empty.textContent = t("noFieldsSelected");
         root.appendChild(empty);
         return;
       }
@@ -200,31 +411,108 @@
           if (point[0] > maxX) maxX = Math.ceil(point[0]);
         });
       });
-      visibleGroups.forEach(function (group) {
+      visibleGroups.forEach(function (group, groupIndex) {
         var card = document.createElement("section");
         card.className = "chart-card";
+        card.dataset.field = group.fields[0];
+        var head = document.createElement("div");
+        head.className = "chart-head";
         var title = document.createElement("h2");
-        title.textContent = group.title;
+        title.appendChild(document.createTextNode(chartTitle(group)));
+        var info = document.createElement("button");
+        info.type = "button";
+        info.className = "info";
+        info.textContent = "i";
+        info.setAttribute("aria-label", t("info"));
+        info.addEventListener("click", function () { openInfo(infoKey(group)); });
+        title.appendChild(info);
+        var reading = document.createElement("span");
+        reading.className = "reading";
+        reading.textContent = readingText(group, series);
+        if (group.fields.length === 1 && isBinary(group.fields[0])) {
+          var bit = lastReading(series[group.fields[0]]);
+          if (bit != null) reading.classList.add(bit >= 0.5 ? "on" : "off");
+        }
+        title.appendChild(reading);
+        var order = document.createElement("div");
+        order.className = "order";
+        [["up", "up", "↑", -1], ["down", "down", "↓", 1]].forEach(function (spec) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.dataset.dir = spec[0];
+          button.setAttribute("aria-label", t(spec[1]));
+          button.textContent = spec[2];
+          button.disabled = (spec[3] < 0 && groupIndex === 0) || (spec[3] > 0 && groupIndex === visibleGroups.length - 1);
+          button.addEventListener("click", function () { moveField(group.fields[0], spec[3]); });
+          order.appendChild(button);
+        });
+        head.appendChild(title);
+        head.appendChild(order);
+        card.appendChild(head);
+        if (group.fields.length === 1 && isBinary(group.fields[0])) {
+          card.dataset.binary = "1";
+          var track = document.createElement("div");
+          track.className = "binary-track";
+          fillBinary(track, series[group.fields[0]]);
+          var axis = document.createElement("div");
+          axis.className = "binary-axis";
+          [0, 4, 8, 12, 16, 20, 24].forEach(function (hour) {
+            var tick = document.createElement("span");
+            tick.textContent = String(hour).padStart(2, "0");
+            axis.appendChild(tick);
+          });
+          card.appendChild(track);
+          card.appendChild(axis);
+          root.appendChild(card);
+          charts.push(null);
+          return;
+        }
         var box = document.createElement("div");
         box.className = "chart-box";
         var canvas = document.createElement("canvas");
         box.appendChild(canvas);
-        card.appendChild(title);
         card.appendChild(box);
         root.appendChild(card);
+        var points = [];
+        group.fields.forEach(function (name) {
+          (series[name] || []).forEach(function (point) { points.push(point); });
+        });
+        var spec = fieldSpec(group.fields[0]);
+        var scale = visibleLimit(points, spec);
         var datasets = group.fields.map(function (name, index) {
+          if (name === "gust") {
+            return {
+              label: fieldTitle("gust", "Gusts"),
+              data: (series[name] || []).map(function (point) { return { x: point[0], y: point[1] }; }),
+              borderColor: "#d1242f",
+              backgroundColor: "#d1242f",
+              pointRadius: 1,
+              pointHoverRadius: 1,
+              pointBorderWidth: 0,
+              pointHitRadius: 8,
+              showLine: false,
+              order: 1
+            };
+          }
           var color = COLORS[index % COLORS.length];
           return {
-            label: name,
+            label: fieldTitle(name, name),
             data: withGaps(series[name]),
             borderColor: color,
             backgroundColor: color,
             spanGaps: false,
             pointRadius: 0,
             borderWidth: 1.5,
-            tension: 0
+            tension: 0,
+            order: 0
           };
-        });
+        }).concat(limitDatasets(group.fields[0], scale.lines, maxX));
+        var yScale = { beginAtZero: false };
+        if (scale.min != null) yScale.min = scale.min;
+        if (scale.max != null) yScale.max = scale.max;
+        if (group.fields.every(function (name) { return name === "light" || name === "rain"; })) {
+          yScale.reverse = true;
+        }
         charts.push(new Chart(canvas, {
           type: "line",
           data: { datasets: datasets },
@@ -233,7 +521,7 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              legend: { display: group.fields.length > 1 },
+              legend: { display: datasets.length > 1 },
               tooltip: {
                 callbacks: {
                   title: function (items) { return formatHour(items[0].parsed.x); }
@@ -246,7 +534,8 @@
                 min: 0,
                 max: maxX,
                 ticks: { stepSize: 2, callback: formatHour }
-              }
+              },
+              y: yScale
             }
           }
         }));
@@ -258,6 +547,39 @@
       document.getElementById("status").textContent = text;
     }
 
+    function infoKey(group) {
+      if (group.fields.indexOf("wind") !== -1) return "wind";
+      return group.fields[0];
+    }
+
+    function openInfo(key) {
+      var modal = document.getElementById("info-modal");
+      var bodyKey = "info." + key;
+      var body = t(bodyKey);
+      document.getElementById("info-title").textContent = fieldTitle(key, key);
+      document.getElementById("info-body").textContent = body === bodyKey ? t("info.unknown") : body;
+      document.getElementById("info-close").textContent = t("close");
+      modal.hidden = false;
+      document.getElementById("info-close").focus();
+    }
+
+    function closeInfo() {
+      document.getElementById("info-modal").hidden = true;
+    }
+
+    function chartTitle(group) {
+      if (group.fields.indexOf("wind") !== -1 && group.fields.indexOf("gust") !== -1) {
+        return fieldTitle("wind", group.title);
+      }
+      return fieldTitle(group.fields[0], group.title);
+    }
+
+    function setCount(payload) {
+      var text = payload.received + " " + t("messages");
+      if (payload.skipped) text += ", " + payload.skipped + " " + t("unreadable");
+      document.getElementById("count").textContent = text;
+    }
+
     var currentSeries = {};
     var chartSignature = "";
     var lastMessageAt = null;
@@ -267,13 +589,13 @@
       var label = document.getElementById("last-message");
       if (lastMessageAt == null || isNaN(lastMessageAt)) {
         led.className = "led red";
-        label.textContent = "keine Nachricht";
+        label.textContent = t("noMessage");
         return;
       }
       var age = Date.now() - lastMessageAt;
       var state = age < 60000 ? "green" : age < 120000 ? "yellow" : "red";
       led.className = "led " + state;
-      label.textContent = new Intl.DateTimeFormat("de-DE", {
+      label.textContent = new Intl.DateTimeFormat(uiLocale(), {
         timeZone: "Europe/Berlin",
         day: "2-digit",
         month: "2-digit",
@@ -314,47 +636,106 @@
     function updateCharts(series, hidden) {
       var groups = visibleGroups(series, hidden);
       var maxX = axisMax(series);
+      var cards = document.querySelectorAll("#charts .chart-card");
       groups.forEach(function (group, index) {
+        var card = cards[index];
+        var reading = card ? card.querySelector(".reading") : null;
+        if (reading) {
+          reading.textContent = readingText(group, series);
+          reading.classList.remove("on", "off");
+          if (group.fields.length === 1 && isBinary(group.fields[0])) {
+            var bit = lastReading(series[group.fields[0]]);
+            if (bit != null) reading.classList.add(bit >= 0.5 ? "on" : "off");
+          }
+        }
+        if (card && card.dataset.binary) {
+          fillBinary(card.querySelector(".binary-track"), series[group.fields[0]]);
+          return;
+        }
         var chart = charts[index];
+        if (!chart) return;
         group.fields.forEach(function (name, fieldIndex) {
-          chart.data.datasets[fieldIndex].data = withGaps(series[name]);
+          chart.data.datasets[fieldIndex].data = name === "gust"
+            ? (series[name] || []).map(function (point) { return { x: point[0], y: point[1] }; })
+            : withGaps(series[name]);
         });
+        for (var lineIndex = group.fields.length; lineIndex < chart.data.datasets.length; lineIndex++) {
+          var line = chart.data.datasets[lineIndex];
+          if (line.data[0]) line.data[0].x = 0;
+          if (line.data[1]) line.data[1].x = maxX;
+        }
         chart.options.scales.x.max = maxX;
         chart.update();
       });
     }
 
+    function moveField(name, dir) {
+      var hidden = hiddenSet();
+      var groups = visibleGroups(currentSeries, hidden);
+      var index = -1;
+      groups.forEach(function (group, i) {
+        if (group.fields.indexOf(name) !== -1) index = i;
+      });
+      var target = index + dir;
+      if (index < 0 || target < 0 || target >= groups.length) return;
+      var moved = groups.splice(index, 1)[0];
+      groups.splice(target, 0, moved);
+      var order = [];
+      groups.forEach(function (group) {
+        group.fields.forEach(function (field) { order.push(field); });
+      });
+      Object.keys(currentSeries).forEach(function (field) {
+        if (order.indexOf(field) === -1) order.push(field);
+      });
+      chartSignature = "";
+      saveSettings({ order: order }).then(function () {
+        if (lastPayload) showPayload(lastPayload);
+      });
+    }
+
+    function saveSettings(partial) {
+      return fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(partial)
+      }).then(function (response) {
+        if (!response.ok) throw new Error(t("saveFailed"));
+        return response.json();
+      }).then(function (body) {
+        settings = body;
+        return body;
+      });
+    }
+
     function showPayload(payload) {
-      var names = Object.keys(payload.series).sort();
+      var names = orderedNames(Object.keys(payload.series));
       var hidden = hiddenSet();
       currentSeries = payload.series;
+      lastPayload = payload;
       if (payload.last_message) lastMessageAt = Date.parse(payload.last_message);
       paintLed();
+      paintFlags(payload.received === 0 ? null : payload.series);
+      setCount(payload);
+      setStatus("");
       if (payload.received === 0) {
         chartSignature = "";
-        document.getElementById("fields").textContent = "";
         destroyCharts();
         var root = document.getElementById("charts");
         root.textContent = "";
         var empty = document.createElement("p");
         empty.className = "empty";
-        empty.textContent = "Keine Daten für diesen Tag.";
+        empty.textContent = t("noData");
         root.appendChild(empty);
-        setStatus("");
         return;
       }
-      var status = payload.received + " Nachrichten";
-      if (payload.skipped) status += ", " + payload.skipped + " nicht lesbar";
-      setStatus(status);
       if (!names.length) {
         chartSignature = "";
-        document.getElementById("fields").textContent = "";
         destroyCharts();
         var box = document.getElementById("charts");
         box.textContent = "";
         var note = document.createElement("p");
         note.className = "empty";
-        note.textContent = "Nachrichten vorhanden, aber ohne numerische Felder.";
+        note.textContent = t("noNumbers");
         box.appendChild(note);
         return;
       }
@@ -363,17 +744,16 @@
         updateCharts(payload.series, hidden);
         return;
       }
-      renderFields(names, hidden, function () { renderCharts(currentSeries, hidden); });
       renderCharts(payload.series, hidden);
       chartSignature = signatureFor(currentSeries, hidden);
     }
 
     function load(date, quiet) {
       document.getElementById("date").value = date;
-      if (!quiet) setStatus("Laden …");
+      if (!quiet) setStatus(t("loading"));
       fetch("/api/data?date=" + encodeURIComponent(date))
         .then(function (response) {
-          if (!response.ok) throw new Error("Abfrage fehlgeschlagen (" + response.status + ")");
+          if (!response.ok) throw new Error(t("queryFailed") + " (" + response.status + ")");
           return response.json();
         })
         .then(function (payload) {
@@ -385,11 +765,16 @@
         });
     }
 
+    document.getElementById("info-close").addEventListener("click", closeInfo);
+    document.getElementById("info-modal").addEventListener("click", function (event) {
+      if (event.target.id === "info-modal") closeInfo();
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") closeInfo();
+    });
+
     document.getElementById("prev").addEventListener("click", function () {
       load(shift(document.getElementById("date").value, -1));
-    });
-    document.getElementById("next").addEventListener("click", function () {
-      load(shift(document.getElementById("date").value, 1));
     });
     document.getElementById("today").addEventListener("click", function () {
       load(todayBerlin());
@@ -398,7 +783,11 @@
       if (event.target.value) load(event.target.value);
     });
 
-    load(todayBerlin());
+    fetch("/api/settings")
+      .then(function (response) { return response.json(); })
+      .then(function (body) { settings = body; })
+      .catch(function () {})
+      .then(function () { load(todayBerlin()); });
     paintLed();
     setInterval(paintLed, 1000);
     setInterval(function () {

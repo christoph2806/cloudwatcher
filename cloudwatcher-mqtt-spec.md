@@ -2,14 +2,14 @@
 
 ## Ziel
 
-Die Wetterstation der Schulsternwarte (Lunatico AAG CloudWatcher mit Solo-Einheit) sendet ihre Messwerte per MQTT an einen Hetzner-Server. Dort werden sie dauerhaft gespeichert und über eine kleine Webseite als Tagesdiagramme angezeigt, mit frei wählbarem Datum.
+Eine Lunatico AAG CloudWatcher mit Solo-Einheit sendet ihre Messwerte per MQTT an einen Unix-Server. Dort werden sie dauerhaft gespeichert und über eine kleine Webseite als Tagesdiagramme angezeigt, mit frei wählbarem Datum.
 
 Bewusst einfach halten: keine Zeitreihendatenbank, kein Grafana, keine Container, sofern nicht ohnehin vorhanden.
 
 ## Architektur
 
 ```
-Solo (Schulnetz) --MQTT, Port 1883--> Mosquitto (Hetzner)
+Solo --MQTT, Port 1883--> Mosquitto
                                           |
                                    collector.py (abonniert, schreibt)
                                           |
@@ -24,8 +24,8 @@ Solo (Schulnetz) --MQTT, Port 1883--> Mosquitto (Hetzner)
 
 - Die Solo unterstützt kein TLS. Verbindung Solo zu Broker ist unverschlüsselt auf Port 1883. Daher eigener Benutzer für die Solo, der nur in seinen Topic schreiben darf.
 - Die Solo sendet in einem einstellbaren Intervall (Minimum 15 s), QoS 1, clean session.
-- Topic auf der Solo: `sternwarte/cloudwatcher`
-- **Nachrichtenformat ist noch unbekannt** (vermutlich JSON). Christoph liefert eine Beispielnachricht nach. Der Code darf daher keine festen Feldnamen voraussetzen (siehe Teil 2).
+- Topic auf der Solo: frei wählbar, Voreinstellung `cloudwatcher` (der Collector abonniert `cloudwatcher/#`).
+- Das Nachrichtenformat der Solo ist JSON. Der Code setzt keine festen Feldnamen voraus; numerische Felder werden beim Lesen erkannt.
 - Zeitstempel intern immer UTC. Anzeige und Tagesgrenzen in Europe/Berlin.
 
 ## Teil 1: Mosquitto
@@ -45,19 +45,19 @@ persistence true
 
 ```
 user solo
-topic write sternwarte/cloudwatcher/#
+topic write cloudwatcher/#
 
 user collector
-topic read sternwarte/#
+topic read cloudwatcher/#
 ```
 
-- Benutzer `solo` und `collector` mit `mosquitto_passwd` anlegen. Passwörter nicht ins Repository, sondern in eine `.env` bzw. Christoph direkt mitteilen.
-- Port 1883 in Hetzner-Firewall und ggf. ufw öffnen. Nur 1883, keine anderen MQTT-Ports.
+- Benutzer `solo` und `collector` mit `mosquitto_passwd` anlegen. Passwörter nicht ins Repository, sondern in eine Datei außerhalb von Git.
+- Port 1883 in der Firewall des Hosts öffnen, wenn die Solo nicht lokal ist. Nur 1883, keine anderen MQTT-Ports.
 
 ## Teil 2: collector.py
 
 - Python 3, Bibliothek `paho-mqtt` (Version 2.x).
-- Verbindet sich als `collector` mit dem lokalen Broker (`localhost:1883`), abonniert `sternwarte/cloudwatcher/#`.
+- Verbindet sich als `collector` mit dem lokalen Broker (`localhost:1883`), abonniert das konfigurierte Topic (Voreinstellung `cloudwatcher/#`).
 - Reconnect automatisch bei Verbindungsverlust; Verbindungsauf- und -abbau loggen.
 - Pro empfangener Nachricht eine Zeile in SQLite:
 
@@ -104,8 +104,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(ts_utc);
 ## Reihenfolge
 
 1. Mosquitto einrichten, Benutzer anlegen, Port öffnen.
-2. Christoph trägt Broker, Topic, Benutzer `solo` in der Solo ein und aktiviert MQTT.
-3. Mit `mosquitto_sub -u collector -P ... -t 'sternwarte/#' -v` prüfen, dass Nachrichten ankommen. **Beispielnachricht an Christoph zurückmelden** und Feldnamen dokumentieren (README).
+2. Broker, Topic und Benutzer `solo` in der Solo eintragen und MQTT aktivieren.
+3. Mit `mosquitto_sub -u collector -P ... -t 'cloudwatcher/#' -v` prüfen, dass Nachrichten ankommen, und die Feldnamen im README dokumentieren.
 4. collector.py mit systemd.
 5. webapp.py mit systemd und Proxy.
 

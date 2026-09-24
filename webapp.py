@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only day charts for stored CloudWatcher MQTT messages."""
+"""Day charts for stored CloudWatcher MQTT messages, plus editable limits."""
 
+import copy
 import json
 import os
 import re
@@ -16,6 +17,98 @@ from flask import Flask, jsonify, request, send_from_directory
 
 TZ = ZoneInfo("Europe/Berlin")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+GREEN = "#1f9d3a"
+YELLOW = "#e0a100"
+RED = "#d1242f"
+SWITCH = "#5b2c6f"
+
+# Solo status limits transcribed from the observatory configuration.
+# Empty values are not drawn. 999 is the Solo's "very windy" sentinel.
+DEFAULT_LIMITS = {
+    "clouds": {
+        "title": "Himmelstemperatur",
+        "unit": "°C",
+        "ymax": None,
+        "lines": [
+            {"id": "clear", "label": "Klar", "value": -15, "color": GREEN},
+            {"id": "cloudy", "label": "Bewölkt", "value": -5, "color": YELLOW},
+            {"id": "overcast", "label": "Bedeckt", "value": 30, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 0, "color": SWITCH},
+        ],
+    },
+    "wind": {
+        "title": "Wind",
+        "unit": "km/h",
+        "ymax": None,
+        "lines": [
+            {"id": "calm", "label": "Ruhig", "value": 5, "color": GREEN},
+            {"id": "windy", "label": "Windig", "value": 30, "color": YELLOW},
+            {"id": "very", "label": "Sehr windig", "value": 999, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 25, "color": SWITCH},
+        ],
+    },
+    "gust": {
+        "title": "Böen",
+        "unit": "km/h",
+        "ymax": None,
+        "lines": [
+            {"id": "calm", "label": "Ruhig", "value": 5, "color": GREEN},
+            {"id": "windy", "label": "Windig", "value": 30, "color": YELLOW},
+            {"id": "very", "label": "Sehr windig", "value": 999, "color": RED},
+        ],
+    },
+    "rain": {
+        "title": "Regen",
+        "unit": "",
+        "ymax": 5000,
+        "lines": [
+            {"id": "dry", "label": "Trocken", "value": 3900, "color": GREEN},
+            {"id": "wet", "label": "Feucht", "value": 3600, "color": YELLOW},
+            {"id": "rain", "label": "Regen", "value": 10, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 4000, "color": SWITCH},
+        ],
+    },
+    "light": {
+        "title": "Helligkeit",
+        "unit": "",
+        "ymax": 65000,
+        "lines": [
+            {"id": "dark", "label": "Dunkel", "value": 75000, "color": GREEN},
+            {"id": "light", "label": "Hell", "value": 250, "color": YELLOW},
+            {"id": "very", "label": "Sehr hell", "value": 0, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 2100, "color": SWITCH},
+        ],
+    },
+    "abspress": {
+        "title": "Absolutdruck",
+        "unit": "Pa",
+        "ymax": None,
+        "lines": [
+            {"id": "low", "label": "Niedrig", "value": None, "color": GREEN},
+            {"id": "medium", "label": "Mittel", "value": None, "color": YELLOW},
+            {"id": "high", "label": "Hoch", "value": None, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 1000, "color": SWITCH},
+        ],
+    },
+    "relpress": {
+        "title": "Relativdruck",
+        "unit": "Pa",
+        "ymax": None,
+        "lines": [
+            {"id": "low", "label": "Niedrig", "value": None, "color": GREEN},
+            {"id": "medium", "label": "Mittel", "value": None, "color": YELLOW},
+            {"id": "high", "label": "Hoch", "value": None, "color": RED},
+            {"id": "unsafe", "label": "Schalter", "value": 1000, "color": SWITCH},
+        ],
+    },
+}
+
+SETTINGS_DDL = """
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+"""
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
@@ -41,6 +134,118 @@ def open_db():
     conn = sqlite3.connect("file:%s?mode=ro" % path, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def open_rw():
+    path = db_path()
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    conn = sqlite3.connect(path, timeout=5)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(SETTINGS_DDL)
+    return conn
+
+
+def _clean_number(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise ValueError("limit value must be a number")
+    number = float(value)
+    if not _finite(number):
+        raise ValueError("limit value must be finite")
+    return number
+
+
+def merge_limits(saved):
+    merged = copy.deepcopy(DEFAULT_LIMITS)
+    if not isinstance(saved, dict):
+        return merged
+    for field, spec in saved.items():
+        if not isinstance(field, str) or not isinstance(spec, dict):
+            continue
+        base = merged.setdefault(
+            field, {"title": field, "unit": "", "ymax": None, "lines": []}
+        )
+        if "ymax" in spec:
+            base["ymax"] = _clean_number(spec.get("ymax"))
+        incoming = spec.get("lines")
+        if not isinstance(incoming, list):
+            continue
+        by_id = {}
+        for line in incoming:
+            if isinstance(line, dict) and isinstance(line.get("id"), str):
+                by_id[line["id"]] = line
+        if base.get("lines"):
+            for line in base["lines"]:
+                got = by_id.get(line["id"])
+                if got and "value" in got:
+                    line["value"] = _clean_number(got.get("value"))
+        else:
+            cleaned = []
+            for line in incoming:
+                if not isinstance(line, dict):
+                    continue
+                cleaned.append({
+                    "id": str(line.get("id") or "limit"),
+                    "label": str(line.get("label") or "Limit"),
+                    "value": _clean_number(line.get("value")),
+                    "color": str(line.get("color") or "#666666"),
+                })
+            base["lines"] = cleaned
+    return merged
+
+
+def read_raw_settings(conn):
+    row = conn.execute("SELECT value FROM settings WHERE key = 'config'").fetchone()
+    if not row:
+        return {"order": [], "limits": {}}
+    try:
+        data = json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return {"order": [], "limits": {}}
+    if not isinstance(data, dict):
+        return {"order": [], "limits": {}}
+    return data
+
+
+def public_settings(raw):
+    order = raw.get("order") if isinstance(raw.get("order"), list) else []
+    order = [item for item in order if isinstance(item, str)]
+    return {"order": order, "limits": merge_limits(raw.get("limits"))}
+
+
+def write_settings(conn, raw):
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('config', ?)",
+        (json.dumps(raw, ensure_ascii=False),),
+    )
+
+
+def apply_settings(conn, payload):
+    if not isinstance(payload, dict):
+        raise ValueError("JSON object required")
+    raw = read_raw_settings(conn)
+    if "order" in payload:
+        order = payload["order"]
+        if (
+            not isinstance(order, list)
+            or len(order) > 200
+            or not all(isinstance(item, str) and len(item) <= 80 for item in order)
+        ):
+            raise ValueError("order must be a list of field names")
+        raw["order"] = order
+    if "limits" in payload:
+        limits = payload["limits"]
+        if not isinstance(limits, dict):
+            raise ValueError("limits must be an object")
+        # Validate numbers before storing. Unknown fields are kept.
+        merge_limits(limits)
+        raw["limits"] = limits
+    write_settings(conn, raw)
+    return public_settings(raw)
 
 
 def parse_day(value):
@@ -156,6 +361,36 @@ def no_cache_html(response):
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/config")
+def config_page():
+    return send_from_directory(app.static_folder, "config.html")
+
+
+@app.get("/api/settings")
+def get_settings():
+    conn = open_rw()
+    try:
+        return jsonify(public_settings(read_raw_settings(conn)))
+    finally:
+        conn.close()
+
+
+@app.put("/api/settings")
+def put_settings():
+    payload = request.get_json(silent=True)
+    conn = open_rw()
+    try:
+        try:
+            saved = apply_settings(conn, payload)
+        except ValueError as exc:
+            conn.rollback()
+            return jsonify(error=str(exc)), 400
+        conn.commit()
+        return jsonify(saved)
+    finally:
+        conn.close()
 
 
 @app.get("/api/days")

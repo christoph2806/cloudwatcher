@@ -1,67 +1,76 @@
 # CloudWatcher MQTT
 
-Die Lunatico-Solo sendet Messwerte per MQTT an diesen Server. `collector.py` speichert jede Nachricht unverändert in SQLite. `webapp.py` zeigt die numerischen Felder als Tagesdiagramme (Europe/Berlin).
+A Lunatico Solo publishes readings over MQTT. `collector.py` stores each message unchanged in SQLite. `webapp.py` draws the numeric fields as day charts (Europe/Berlin). The pages are English and German; the language is chosen under Settings and stored in the browser.
 
 ## Solo
 
-| Einstellung | Wert |
+| Setting | Value |
 | --- | --- |
-| Broker | `142.132.166.43` |
-| Port | `1883` (ohne TLS) |
-| Benutzer | `solo` |
-| Topic | `sternwarte/cloudwatcher` |
+| Broker | this host, port `1883` (no TLS) |
+| User | `solo` |
+| Topic | the topic chosen at install (default `cloudwatcher`) |
 | QoS | 1 |
 
-Das Passwort steht auf dem Server in `CREDENTIALS.txt` (nicht im Git).
+The password is written on the server to `CREDENTIALS.txt` (not in git).
+
+## Requirements
+
+`deploy/install.sh` does not install operating-system packages and does not target a particular distribution. Install these with the host's own package manager:
+
+- Python 3, including the `venv` module, and OpenSSL
+- Mosquitto, if this host should be the broker (`mosquitto_passwd` on `PATH`)
+- optional: nginx, certbot, and systemd
+
+Open TCP port 1883 on the host firewall when the Solo is not on the same machine.
 
 ## Installation
 
-Auf dem Server, im Checkout:
+From a checkout, as root:
 
-```bash
-sudo bash deploy/install.sh
+```sh
+sudo MQTT_TOPIC='cloudwatcher/#' WEB_USER=viewer \
+     SERVER_NAME=weather.example.com sh deploy/install.sh
 ```
 
-Das Skript ist wiederholbar. Zertifikat und nginx-TLS-VHost entstehen, sobald `cloudwatcher.mussenbrock.net` auf diesen Host zeigt.
+`MQTT_TOPIC` is the collector subscription (default `cloudwatcher/#`). `WEB_USER` is the basic-auth user (default `viewer`). Without `SERVER_NAME`, nginx and certificates are left untouched and the UI stays on `127.0.0.1:8095`. Re-running keeps existing passwords and, when the variables are omitted, the topic and web user already installed.
 
-## Pfade
+## Paths
 
-| Pfad | Inhalt |
+| Path | Contents |
 | --- | --- |
-| `/opt/cloudwatcher/` | Programm und Python-venv |
+| `/opt/cloudwatcher/` | program and Python venv (`PREFIX`) |
 | `/var/lib/cloudwatcher/data.db` | SQLite (WAL) |
-| `/etc/cloudwatcher/collector.env` | MQTT-Zugang des Collectors |
-| `/etc/cloudwatcher/secrets.env` | Passwörter |
-| `/etc/mosquitto/conf.d/solo.conf` | Broker |
-| `/etc/mosquitto/acl` | Rechte `solo` (nur Schreiben) und `collector` (nur Lesen) |
-| `/etc/nginx/sites-available/cloudwatcher.mussenbrock.net` | HTTPS und Basic Auth |
+| `/etc/cloudwatcher/collector.env` | collector MQTT settings |
+| `/etc/cloudwatcher/secrets.env` | passwords |
+| Mosquitto `conf.d/cloudwatcher.conf` | broker listener, when Mosquitto is installed |
+| nginx `conf.d/cloudwatcher.conf` | reverse proxy, when `SERVER_NAME` is set |
 
-Die Web-App hört nur auf `127.0.0.1:8095`.
+The web app listens only on `127.0.0.1:8095` unless `WEB_HOST` and `WEB_PORT` say otherwise.
 
-## Dienste
+## Services
 
-- `mosquitto`
-- `cloudwatcher-collector.service` (Benutzer `cloudwatcher`, `Restart=always`)
-- `cloudwatcher-web.service` (derselbe Benutzer, nur localhost)
+When systemd is running, the script enables:
 
-Nach einem Neustart des Servers starten sie von selbst.
+- `mosquitto` (if the broker was configured here)
+- `cloudwatcher-collector.service` (user `cloudwatcher`, `Restart=always`)
+- `cloudwatcher-web.service` (same user, localhost only)
 
-Prüfung, ob die Solo ankommt:
+Otherwise it prints the two commands to run under any supervisor.
 
-```bash
-mosquitto_sub -h localhost -u collector -P '…' -t 'sternwarte/#' -v
+Check that the Solo is publishing:
+
+```sh
+mosquitto_sub -h localhost -u collector -P '…' -t 'cloudwatcher/#' -v
 ```
 
-Die Seite ist `https://cloudwatcher.mussenbrock.net` (Basic Auth, Benutzer `sternwarte`).
+## Example message
 
-## Beispielnachricht
-
-Empfangen am 2026-09-24 auf `sternwarte/cloudwatcher`. Die Rohzeichenfolge wird unverändert gespeichert; die Web-App macht das JSON-Objekt flach und zeichnet jedes numerische Feld.
+The raw text is stored unchanged. The web app flattens the JSON object and charts every numeric field.
 
 ```json
 {
   "dataGMTTime": "2026/09/23 22:59:18",
-  "cwinfo": "Serial: 1953, FW: 5.83",
+  "cwinfo": "Serial: 1, FW: 5.83",
   "slddata": "2026-09-24 00:59:24.00 C K  -12.9    9.5    9.5    0.0  -1  -20.0  33 0 0 00000 046289.04125 2 1 1 2 0 0",
   "clouds": -12.88,
   "temp": 9.54,
@@ -79,20 +88,20 @@ Empfangen am 2026-09-24 auf `sternwarte/cloudwatcher`. Die Rohzeichenfolge wird 
 }
 ```
 
-## Feldbedeutungen
+## Fields
 
-| Feld | Bedeutung |
+| Field | Meaning |
 | --- | --- |
-| `dataGMTTime` | Zeitstempel der Solo, GMT |
-| `cwinfo` | Seriennummer und Firmware |
-| `slddata` | Rohzeile der Solo, nicht numerisch ausgewertet |
-| `clouds` | Himmelstemperatur, °C |
-| `temp` | Umgebungstemperatur, °C |
-| `rawir` | Unkorrigierte Infrarottemperatur, °C |
-| `wind`, `gust` | Wind und Böen |
-| `rain` | Regensensor, Rohwert (höher ist trockener) |
-| `light` | Helligkeit, Rohwert |
-| `switch` | Schaltausgang |
-| `safe` | `1` = Beobachtung freigegeben |
-| `hum`, `dewp` | Luftfeuchte in % und Taupunkt; `-1` / fehlender Sensor |
-| `abspress`, `relpress` | Luftdruck; `0` = kein Sensor |
+| `dataGMTTime` | Solo timestamp, GMT |
+| `cwinfo` | Serial number and firmware |
+| `slddata` | Solo raw line, not parsed as a number |
+| `clouds` | Sky temperature, °C |
+| `temp` | Ambient temperature, °C |
+| `rawir` | Uncorrected infrared temperature, °C |
+| `wind`, `gust` | Wind and gusts, drawn on one chart |
+| `rain` | Rain sensor, raw value (higher is drier) |
+| `light` | Brightness, raw value |
+| `switch` | Switch output |
+| `safe` | `1` means observing is allowed |
+| `hum`, `dewp` | Humidity in % and dew point; `-1` means no sensor |
+| `abspress`, `relpress` | Pressure; `0` means no sensor |

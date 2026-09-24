@@ -37,19 +37,19 @@ class LogicTest(unittest.TestCase):
         # 2026-09-23 22:30 UTC is 2026-09-24 00:30 in Berlin (CEST).
         collector.store_message(
             self.conn,
-            "sternwarte/cloudwatcher",
+            "cloudwatcher",
             json.dumps({"temp": 1}),
             "2026-09-23T22:30:00.000000+00:00",
         )
         collector.store_message(
             self.conn,
-            "sternwarte/cloudwatcher",
+            "cloudwatcher",
             "not-json",
             "2026-09-24T12:00:00.000000+00:00",
         )
         collector.store_message(
             self.conn,
-            "sternwarte/cloudwatcher",
+            "cloudwatcher",
             json.dumps({"temp": 2}),
             "2026-09-24T22:00:00.000000+00:00",
         )
@@ -68,7 +68,7 @@ class LogicTest(unittest.TestCase):
     def test_winter_boundary_and_missing_day(self):
         collector.store_message(
             self.conn,
-            "sternwarte/cloudwatcher",
+            "cloudwatcher",
             json.dumps({"wind": 3}),
             "2026-01-14T23:30:00.000000+00:00",
         )
@@ -78,6 +78,22 @@ class LogicTest(unittest.TestCase):
         self.assertEqual(empty["received"], 0)
         self.assertEqual(empty["series"], {})
         self.assertEqual(empty["last_message"], "2026-01-15T00:30:00+01:00")
+
+    def test_settings_roundtrip(self):
+        defaults = self.client.get("/api/settings").get_json()
+        self.assertEqual(defaults["order"], [])
+        clear = [line for line in defaults["limits"]["clouds"]["lines"] if line["id"] == "clear"][0]
+        self.assertEqual(clear["value"], -15)
+        saved = self.client.put(
+            "/api/settings",
+            json={"order": ["rain", "clouds"], "limits": {"clouds": {"lines": [{"id": "clear", "value": -20}]}}},
+        )
+        self.assertEqual(saved.status_code, 200)
+        body = saved.get_json()
+        self.assertEqual(body["order"], ["rain", "clouds"])
+        clear = [line for line in body["limits"]["clouds"]["lines"] if line["id"] == "clear"][0]
+        self.assertEqual(clear["value"], -20)
+        self.assertEqual(body["limits"]["clouds"]["lines"][1]["value"], -5)
 
     def test_bad_date(self):
         self.assertEqual(self.client.get("/api/data?date=yesterday").status_code, 400)

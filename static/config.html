@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="pageSettings">CloudWatcher settings</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0 auto;
+      max-width: 960px;
+      padding: 16px;
+      font-family: system-ui, sans-serif;
+      color: #1a1a1a;
+      background: #f6f7f9;
+    }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.05rem; margin: 20px 0 8px; }
+    a { color: #1f4e79; }
+    #fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 8px; }
+    #fields label { display: flex; align-items: center; gap: 6px; min-height: 32px; }
+    fieldset {
+      background: #fff;
+      border: 1px solid #e1e4ea;
+      border-radius: 10px;
+      margin: 0 0 12px;
+      padding: 8px 12px 12px;
+    }
+    legend { font-weight: 600; padding: 0 6px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 14rem 9rem;
+      column-gap: 12px;
+      row-gap: 6px;
+      align-items: center;
+    }
+    .name { display: flex; align-items: center; gap: 8px; }
+    input[type="number"] {
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 16px;
+      width: 100%;
+      height: 28px;
+      padding: 0 8px;
+      border: 1px solid #c5c9d1;
+      border-radius: 6px;
+    }
+    .swatch { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+    button {
+      font: inherit;
+      font-size: 16px;
+      height: 36px;
+      padding: 0 14px;
+      border: 1px solid #c5c9d1;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+    #msg { min-height: 1.4em; }
+    .lang-row { display: flex; align-items: center; gap: 8px; }
+    select {
+      box-sizing: border-box;
+      font: inherit;
+      font-size: 16px;
+      height: 36px;
+      padding: 0 8px;
+      border: 1px solid #c5c9d1;
+      border-radius: 8px;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <p><a href="/" data-i18n="charts">Charts</a></p>
+  <h1 data-i18n="settings">Settings</h1>
+  <p class="lang-row">
+    <label for="lang" data-i18n="language">Language</label>
+    <select id="lang">
+      <option value="de">Deutsch</option>
+      <option value="en">English</option>
+    </select>
+  </p>
+  <h2 data-i18n="diagrams">Charts</h2>
+  <div id="fields"></div>
+  <h2 data-i18n="limits">Limits</h2>
+  <p data-i18n="limitsHelp">Defaults from the Solo. Empty fields are not drawn. A line far outside that day's values is omitted so the curve stays readable.</p>
+  <form id="form"></form>
+  <p><button type="submit" form="form" data-i18n="save">Save</button></p>
+  <p id="msg"></p>
+  <script src="/static/i18n.js"></script>
+  <script>
+    applyI18n();
+    var HIDDEN_KEY = "cloudwatcher-hidden-fields";
+    var settings = { limits: {} };
+    var fieldList = [];
+
+    function todayBerlin() {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).format(new Date());
+    }
+
+    function hiddenSet() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"));
+      } catch (err) {
+        return new Set();
+      }
+    }
+
+    function saveHidden(hidden) {
+      localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hidden)));
+    }
+
+    function fieldNames(series, order) {
+      var names = Object.keys(series || {});
+      (order || []).forEach(function (name) {
+        if (names.indexOf(name) === -1) names.push(name);
+      });
+      hiddenSet().forEach(function (name) {
+        if (names.indexOf(name) === -1) names.push(name);
+      });
+      var rank = {};
+      (order || []).forEach(function (name, index) { rank[name] = index; });
+      return names.sort(function (a, b) {
+        var ra = Object.prototype.hasOwnProperty.call(rank, a) ? rank[a] : 10000;
+        var rb = Object.prototype.hasOwnProperty.call(rank, b) ? rank[b] : 10000;
+        if (ra !== rb) return ra - rb;
+        return a < b ? -1 : a > b ? 1 : 0;
+      });
+    }
+
+    function renderFields(names) {
+      fieldList = names;
+      var box = document.getElementById("fields");
+      var hidden = hiddenSet();
+      box.textContent = "";
+      if (!names.length) {
+        box.textContent = t("noFields");
+        return;
+      }
+      names.forEach(function (name) {
+        var label = document.createElement("label");
+        var input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = !hidden.has(name);
+        input.addEventListener("change", function () {
+          if (input.checked) hidden.delete(name);
+          else hidden.add(name);
+          saveHidden(hidden);
+        });
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(name));
+        box.appendChild(label);
+      });
+    }
+
+    function inputValue(value) {
+      return value == null ? "" : String(value);
+    }
+
+    function render(limits) {
+      var form = document.getElementById("form");
+      form.textContent = "";
+      Object.keys(limits).forEach(function (field) {
+        var spec = limits[field];
+        var box = document.createElement("fieldset");
+        box.dataset.field = field;
+        var legend = document.createElement("legend");
+        legend.textContent = fieldTitle(field, spec.title || field) + (spec.unit ? " (" + spec.unit + ")" : "");
+        box.appendChild(legend);
+        var grid = document.createElement("div");
+        grid.className = "grid";
+        function addRow(text, input, swatchColor) {
+          var name = document.createElement("label");
+          name.className = "name";
+          name.htmlFor = input.id;
+          var swatch = document.createElement("span");
+          swatch.className = "swatch";
+          if (swatchColor) swatch.style.background = swatchColor;
+          else swatch.style.visibility = "hidden";
+          name.appendChild(swatch);
+          name.appendChild(document.createTextNode(text));
+          grid.appendChild(name);
+          grid.appendChild(input);
+        }
+        var ymax = document.createElement("input");
+        ymax.type = "number";
+        ymax.step = "any";
+        ymax.id = field + "-ymax";
+        ymax.dataset.role = "ymax";
+        ymax.value = inputValue(spec.ymax);
+        addRow(t("chartMax"), ymax, null);
+        (spec.lines || []).forEach(function (line) {
+          var input = document.createElement("input");
+          input.type = "number";
+          input.step = "any";
+          input.id = field + "-" + line.id;
+          input.dataset.role = "line";
+          input.dataset.id = line.id;
+          input.value = inputValue(line.value);
+          addRow(limitName(field, line.id, line.label || line.id), input, line.color || "#666");
+        });
+        box.appendChild(grid);
+        form.appendChild(box);
+      });
+    }
+
+    function collect() {
+      var limits = JSON.parse(JSON.stringify(settings.limits));
+      document.querySelectorAll("fieldset").forEach(function (box) {
+        var field = box.dataset.field;
+        var spec = limits[field];
+        if (!spec) return;
+        var ymax = box.querySelector("[data-role=ymax]");
+        spec.ymax = ymax.value === "" ? null : Number(ymax.value);
+        box.querySelectorAll("[data-role=line]").forEach(function (input) {
+          (spec.lines || []).forEach(function (line) {
+            if (line.id === input.dataset.id) {
+              line.value = input.value === "" ? null : Number(input.value);
+            }
+          });
+        });
+      });
+      return limits;
+    }
+
+    document.getElementById("form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      var msg = document.getElementById("msg");
+      msg.textContent = t("saving");
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limits: collect() })
+      }).then(function (response) {
+        if (!response.ok) throw new Error(t("saveFailed"));
+        return response.json();
+      }).then(function (body) {
+        settings = body;
+        render(body.limits);
+        msg.textContent = t("saved");
+      }).catch(function (err) {
+        msg.textContent = err.message;
+      });
+    });
+
+    var langSelect = document.getElementById("lang");
+    langSelect.value = currentLang();
+    langSelect.addEventListener("change", function () {
+      localStorage.setItem(LANG_KEY, langSelect.value);
+      applyI18n();
+      if (settings.limits) render(settings.limits);
+      renderFields(fieldList);
+    });
+
+    fetch("/api/settings")
+      .then(function (response) { return response.json(); })
+      .then(function (body) {
+        settings = body;
+        render(body.limits);
+        fetch("/api/data?date=" + encodeURIComponent(todayBerlin()))
+          .then(function (response) { return response.json(); })
+          .then(function (payload) {
+            renderFields(fieldNames(payload.series, settings.order));
+          })
+          .catch(function () {
+            renderFields(fieldNames({}, settings.order));
+          });
+      })
+      .catch(function () {
+        document.getElementById("msg").textContent = t("loadFailed");
+      });
+  </script>
+</body>
+</html>

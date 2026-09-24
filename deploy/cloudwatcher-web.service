@@ -5,11 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=cloudwatcher
-Group=cloudwatcher
+User=@RUN_USER@
+Group=@RUN_GROUP@
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/etc/cloudwatcher/web.env
-ExecStart=/opt/cloudwatcher/venv/bin/python /opt/cloudwatcher/webapp.py
+EnvironmentFile=@CONFIG_DIR@/web.env
+ExecStart=@PREFIX@/venv/bin/python @PREFIX@/webapp.py
 Restart=always
 RestartSec=3
 
