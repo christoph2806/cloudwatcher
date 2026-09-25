@@ -18,7 +18,15 @@
       color: #eef3f8;
       background: transparent;
     }
-    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .sticky-head {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      margin: -16px -16px 0;
+      padding: 16px 16px 12px;
+      background: #071018 url("/static/backdrop.jpg") center center / cover no-repeat fixed;
+    }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; }
     .brand { display: flex; align-items: center; gap: 10px; }
     .logo { height: 2rem; width: auto; display: block; }
     h1 { font-size: 2rem; line-height: 1; margin: 0; color: #f4f7fb; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
@@ -68,7 +76,7 @@
       cursor: pointer;
     }
     #msg { min-height: 1.4em; }
-    .lang-row { display: flex; align-items: center; gap: 8px; }
+    .lang-row { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
     select {
       box-sizing: border-box;
       font: inherit;
@@ -86,12 +94,14 @@
   </style>
 </head>
 <body>
-  <div class="top">
-    <div class="brand">
-      <img class="logo" src="/static/logo.png" alt="">
-      <h1 data-i18n="settings">Settings</h1>
+  <div class="sticky-head">
+    <div class="top">
+      <div class="brand">
+        <img class="logo" src="/static/logo.png" alt="">
+        <h1 data-i18n="settings">Settings</h1>
+      </div>
+      <a class="nav" href="/" data-i18n="charts">Charts</a>
     </div>
-    <a class="nav" href="/" data-i18n="charts">Charts</a>
   </div>
   <p class="lang-row">
     <label for="lang" data-i18n="language">Language</label>

@@ -444,7 +444,9 @@
         }
         var on = value >= 0.5;
         led.className = "led " + (on ? "green" : "red");
-        label.textContent = fieldTitle(spec[0], spec[1]) + " " + stateWord(spec[0], value);
+        label.textContent = spec[0] === "safe"
+          ? t(on ? "safeStateOn" : "safeStateOff")
+          : fieldTitle(spec[0], spec[1]) + " " + stateWord(spec[0], value);
       });
     }
 
@@ -564,6 +566,93 @@
       });
       return unsafe != null ? unsafe : red;
     }
+
+    function switchLimit(name) {
+      var value = null;
+      fieldSpec(name).lines.forEach(function (line) {
+        if (line.id === "unsafe" && isFinite(line.value) && Math.abs(line.value) < 900) value = line.value;
+      });
+      return value;
+    }
+
+    function switchExceeded(name, value) {
+      var limit = switchLimit(name);
+      if (limit == null || value == null || isNaN(value)) return false;
+      if (name === "rain" || name === "light") return value < limit;
+      return value > limit;
+    }
+
+    function exceededRuns(name, points) {
+      var runs = [];
+      if (!points || !points.length || switchLimit(name) == null) return runs;
+      var gap = 2 / 60;
+      var minWidth = 1.5 / 60;
+      var active = null;
+      var prev = null;
+      points.forEach(function (point) {
+        var hour = point[0];
+        if (prev !== null && hour - prev > gap && active) {
+          runs.push(active);
+          active = null;
+        }
+        if (switchExceeded(name, point[1])) {
+          if (!active) active = { start: hour, end: hour };
+          else active.end = hour;
+        } else if (active) {
+          runs.push(active);
+          active = null;
+        }
+        prev = hour;
+      });
+      if (active) runs.push(active);
+      return runs.map(function (run) {
+        return { start: run.start, end: run.end <= run.start ? run.start + minWidth : run.end };
+      });
+    }
+
+    function mergeRuns(runs) {
+      var out = [];
+      runs.slice().sort(function (a, b) { return a.start - b.start; }).forEach(function (run) {
+        var last = out[out.length - 1];
+        if (last && run.start <= last.end) last.end = Math.max(last.end, run.end);
+        else out.push({ start: run.start, end: run.end });
+      });
+      return out;
+    }
+
+    function switchRunsFor(group, series) {
+      var runs = [];
+      group.fields.forEach(function (name) {
+        exceededRuns(name, series[name]).forEach(function (run) { runs.push(run); });
+      });
+      return mergeRuns(runs);
+    }
+
+    var SWITCH_PINK = "rgba(196, 128, 136, 0.62)";
+    Chart.register({
+      id: "switchBands",
+      beforeDatasetsDraw: function (chart) {
+        var opts = chart.options.plugins && chart.options.plugins.switchBands;
+        var runs = opts && opts.runs;
+        var area = chart.chartArea;
+        var xScale = chart.scales.x;
+        if (!runs || !runs.length || !area || !xScale) return;
+        var ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
+        ctx.clip();
+        ctx.fillStyle = SWITCH_PINK;
+        runs.forEach(function (run) {
+          var x0 = xScale.getPixelForValue(run.start);
+          var x1 = xScale.getPixelForValue(run.end);
+          if (x1 < x0) { var swap = x0; x0 = x1; x1 = swap; }
+          if (x1 - x0 < 2) x1 = x0 + 2;
+          ctx.fillRect(x0, area.top, x1 - x0, area.bottom - area.top);
+        });
+        ctx.restore();
+      }
+    });
 
     function readingOutside(name, value) {
       if (value == null || isNaN(value)) return null;
@@ -728,8 +817,8 @@
             return {
               label: fieldTitle("gust", "Gusts"),
               data: (series[name] || []).map(function (point) { return { x: point[0], y: point[1] }; }),
-              borderColor: "#d1242f",
-              backgroundColor: "#d1242f",
+              borderColor: "#e0a100",
+              backgroundColor: "#e0a100",
               pointRadius: 1,
               pointHoverRadius: 1,
               pointBorderWidth: 0,
@@ -770,6 +859,7 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
+              switchBands: { runs: switchRunsFor(group, series) },
               legend: { display: datasets.length > 1, labels: { color: "#d5dbe3" } },
               tooltip: {
                 callbacks: {
@@ -892,6 +982,9 @@
         }
         var chart = charts[index];
         if (!chart) return;
+        if (chart.options.plugins.switchBands) {
+          chart.options.plugins.switchBands.runs = switchRunsFor(group, series);
+        }
         group.fields.forEach(function (name, fieldIndex) {
           chart.data.datasets[fieldIndex].data = name === "gust"
             ? (series[name] || []).map(function (point) { return { x: point[0], y: point[1] }; })
