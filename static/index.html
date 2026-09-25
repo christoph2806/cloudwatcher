@@ -210,6 +210,7 @@
     // Combine fields into one chart once a sample message documents the schema.
     var FIELD_GROUPS = [{ title: "Wind", fields: ["wind", "gust"] }];
     var COLORS = ["#8ec5ff", "#f0a36a", "#7dce72", "#c9a0f0", "#7fd0d8"];
+    var GAP_HOURS = 15 / 60;
     var charts = [];
     var settings = { order: [], hidden: [], lang: "", limits: {} };
     var lastPayload = null;
@@ -366,7 +367,7 @@
     }
 
     function withGaps(points) {
-      var gap = 2 / 60;
+      var gap = GAP_HOURS;
       var out = [];
       var prev = null;
       points.forEach(function (p) {
@@ -398,7 +399,7 @@
     function binaryRuns(points) {
       var runs = [];
       if (!points || !points.length) return runs;
-      var gap = 2 / 60;
+      var gap = GAP_HOURS;
       var start = points[0][0];
       var bit = points[0][1] >= 0.5 ? 1 : 0;
       var prev = start;
@@ -585,7 +586,7 @@
     function coverageRuns(name, points) {
       var runs = [];
       if (!points || !points.length || switchLimit(name) == null) return runs;
-      var gap = 2 / 60;
+      var gap = GAP_HOURS;
       var minWidth = 1.5 / 60;
       var usable = points.filter(function (point) { return point[1] != null && !isNaN(point[1]); });
       if (!usable.length) return runs;
