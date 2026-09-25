@@ -23,10 +23,8 @@
       position: sticky;
       top: 0;
       z-index: 8;
-      margin: -16px -16px 12px;
-      padding: 12px 16px 8px;
-      background: rgba(7, 16, 24, 0.94);
     }
+    #safe-dock { margin-bottom: 28px; }
     .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
     .brand { display: flex; align-items: center; gap: 10px; }
     .logo { height: 2rem; width: auto; display: block; }
@@ -675,20 +673,22 @@
           if (bit != null) reading.classList.add(bit >= 0.5 ? "on" : "off");
         }
         title.appendChild(reading);
-        var order = document.createElement("div");
-        order.className = "order";
-        [["up", "up", "↑", -1], ["down", "down", "↓", 1]].forEach(function (spec) {
-          var button = document.createElement("button");
-          button.type = "button";
-          button.dataset.dir = spec[0];
-          button.setAttribute("aria-label", t(spec[1]));
-          button.textContent = spec[2];
-          button.disabled = (spec[3] < 0 && groupIndex === 0) || (spec[3] > 0 && groupIndex === visibleGroups.length - 1);
-          button.addEventListener("click", function () { moveField(group.fields[0], spec[3]); });
-          order.appendChild(button);
-        });
         head.appendChild(title);
-        head.appendChild(order);
+        if (group.fields[0] !== "safe") {
+          var order = document.createElement("div");
+          order.className = "order";
+          [["up", "up", "↑", -1], ["down", "down", "↓", 1]].forEach(function (spec) {
+            var button = document.createElement("button");
+            button.type = "button";
+            button.dataset.dir = spec[0];
+            button.setAttribute("aria-label", t(spec[1]));
+            button.textContent = spec[2];
+            button.disabled = (spec[3] < 0 && groupIndex === 0) || (spec[3] > 0 && groupIndex === visibleGroups.length - 1);
+            button.addEventListener("click", function () { moveField(group.fields[0], spec[3]); });
+            order.appendChild(button);
+          });
+          head.appendChild(order);
+        }
         card.appendChild(head);
         if (group.fields.length === 1 && isBinary(group.fields[0])) {
           card.dataset.binary = "1";
