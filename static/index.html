@@ -582,53 +582,79 @@
       return value > limit;
     }
 
-    function exceededRuns(name, points) {
+    function coverageRuns(name, points) {
       var runs = [];
       if (!points || !points.length || switchLimit(name) == null) return runs;
       var gap = 2 / 60;
       var minWidth = 1.5 / 60;
-      var active = null;
-      var prev = null;
-      points.forEach(function (point) {
-        var hour = point[0];
-        if (prev !== null && hour - prev > gap && active) {
-          runs.push(active);
-          active = null;
-        }
-        if (switchExceeded(name, point[1])) {
-          if (!active) active = { start: hour, end: hour };
-          else active.end = hour;
-        } else if (active) {
-          runs.push(active);
-          active = null;
+      var usable = points.filter(function (point) { return point[1] != null && !isNaN(point[1]); });
+      if (!usable.length) return runs;
+      var start = usable[0][0];
+      var exceeded = switchExceeded(name, usable[0][1]);
+      var prev = start;
+      function close(end) {
+        runs.push({ start: start, end: end <= start ? start + minWidth : end, exceeded: exceeded });
+      }
+      for (var i = 1; i < usable.length; i++) {
+        var hour = usable[i][0];
+        var next = switchExceeded(name, usable[i][1]);
+        if (hour - prev > gap) {
+          close(prev);
+          start = hour;
+          exceeded = next;
+        } else if (next !== exceeded) {
+          close(hour);
+          start = hour;
+          exceeded = next;
         }
         prev = hour;
-      });
-      if (active) runs.push(active);
-      return runs.map(function (run) {
-        return { start: run.start, end: run.end <= run.start ? run.start + minWidth : run.end };
-      });
+      }
+      close(prev);
+      return runs;
     }
 
-    function mergeRuns(runs) {
+    function mergeStateRuns(parts) {
+      var events = [];
+      parts.forEach(function (run) {
+        events.push({ t: run.start, ex: run.exceeded ? 1 : 0, ok: run.exceeded ? 0 : 1 });
+        events.push({ t: run.end, ex: run.exceeded ? -1 : 0, ok: run.exceeded ? 0 : -1 });
+      });
+      events.sort(function (a, b) {
+        if (a.t !== b.t) return a.t - b.t;
+        return (a.ex + a.ok) - (b.ex + b.ok);
+      });
       var out = [];
-      runs.slice().sort(function (a, b) { return a.start - b.start; }).forEach(function (run) {
-        var last = out[out.length - 1];
-        if (last && run.start <= last.end) last.end = Math.max(last.end, run.end);
-        else out.push({ start: run.start, end: run.end });
+      var ex = 0;
+      var ok = 0;
+      var prevT = null;
+      var prevState = null;
+      function state() { return ex > 0 ? "over" : ok > 0 ? "ok" : null; }
+      events.forEach(function (ev) {
+        var now = state();
+        if (prevState && prevT != null && ev.t > prevT) {
+          var exceeded = prevState === "over";
+          var last = out[out.length - 1];
+          if (last && last.exceeded === exceeded && last.end === prevT) last.end = ev.t;
+          else out.push({ start: prevT, end: ev.t, exceeded: exceeded });
+        }
+        ex += ev.ex;
+        ok += ev.ok;
+        prevT = ev.t;
+        prevState = state();
       });
       return out;
     }
 
     function switchRunsFor(group, series) {
-      var runs = [];
+      var parts = [];
       group.fields.forEach(function (name) {
-        exceededRuns(name, series[name]).forEach(function (run) { runs.push(run); });
+        coverageRuns(name, series[name]).forEach(function (run) { parts.push(run); });
       });
-      return mergeRuns(runs);
+      return mergeStateRuns(parts);
     }
 
-    var SWITCH_PINK = "rgba(196, 128, 136, 0.62)";
+    var SWITCH_PINK = "rgba(176, 154, 158, 0.6)";
+    var SWITCH_GREEN = "rgba(154, 172, 160, 0.6)";
     Chart.register({
       id: "switchBands",
       beforeDatasetsDraw: function (chart) {
@@ -642,12 +668,12 @@
         ctx.beginPath();
         ctx.rect(area.left, area.top, area.right - area.left, area.bottom - area.top);
         ctx.clip();
-        ctx.fillStyle = SWITCH_PINK;
         runs.forEach(function (run) {
           var x0 = xScale.getPixelForValue(run.start);
           var x1 = xScale.getPixelForValue(run.end);
           if (x1 < x0) { var swap = x0; x0 = x1; x1 = swap; }
           if (x1 - x0 < 2) x1 = x0 + 2;
+          ctx.fillStyle = run.exceeded ? SWITCH_PINK : SWITCH_GREEN;
           ctx.fillRect(x0, area.top, x1 - x0, area.bottom - area.top);
         });
         ctx.restore();
