@@ -50,7 +50,9 @@
     .binary-track .seg { position: absolute; top: 0; bottom: 0; }
     .binary-track .seg.on { background: #1f9d3a; }
     .binary-track .seg.off { background: #d1242f; }
-    .binary-axis { display: flex; justify-content: space-between; margin-top: 4px; color: #d5dbe3; font-size: 12px; }
+    .binary-grid { display: grid; grid-template-columns: max-content 1fr; column-gap: 10px; row-gap: 6px; align-items: center; }
+    .binary-label { font-size: 14px; color: #d5dbe3; }
+    .binary-axis { display: flex; justify-content: space-between; color: #d5dbe3; font-size: 12px; }
     .reading.on { color: #5dce73; }
     .reading.off { color: #ff6b74; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
@@ -208,7 +210,10 @@
     applyI18n();
     syncDateControl();
     // Combine fields into one chart once a sample message documents the schema.
-    var FIELD_GROUPS = [{ title: "Wind", fields: ["wind", "gust"] }];
+    var FIELD_GROUPS = [
+      { title: "Status", fields: ["safe", "switch"] },
+      { title: "Wind", fields: ["wind", "gust"] }
+    ];
     var COLORS = ["#8ec5ff", "#f0a36a", "#7dce72", "#c9a0f0", "#7fd0d8"];
     var GAP_HOURS = 15 / 60;
     var charts = [];
@@ -387,6 +392,10 @@
 
     function isBinary(name) {
       return name === "safe" || name === "switch";
+    }
+
+    function isStatusGroup(group) {
+      return group.fields.every(isBinary);
     }
 
     function stateWord(name, value) {
@@ -713,6 +722,7 @@
     }
 
     function readingText(group, series) {
+      if (group.fields.length > 1 && isStatusGroup(group)) return "";
       return group.fields.map(function (name) {
         var value = lastReading(series[name]);
         if (value == null || isNaN(value)) return "";
@@ -793,7 +803,7 @@
         }
         title.appendChild(reading);
         head.appendChild(title);
-        if (group.fields[0] !== "safe") {
+        if (!isStatusGroup(group)) {
           var order = document.createElement("div");
           order.className = "order";
           [["up", "up", "↑", -1], ["down", "down", "↓", 1]].forEach(function (spec) {
@@ -809,11 +819,21 @@
           head.appendChild(order);
         }
         card.appendChild(head);
-        if (group.fields.length === 1 && isBinary(group.fields[0])) {
+        if (isStatusGroup(group)) {
           card.dataset.binary = "1";
-          var track = document.createElement("div");
-          track.className = "binary-track";
-          fillBinary(track, series[group.fields[0]]);
+          var grid = document.createElement("div");
+          grid.className = "binary-grid";
+          group.fields.forEach(function (name) {
+            var label = document.createElement("span");
+            label.className = "binary-label";
+            label.textContent = fieldTitle(name, name);
+            var track = document.createElement("div");
+            track.className = "binary-track";
+            track.dataset.field = name;
+            fillBinary(track, series[name]);
+            grid.appendChild(label);
+            grid.appendChild(track);
+          });
           var axis = document.createElement("div");
           axis.className = "binary-axis";
           [0, 4, 8, 12, 16, 20, 24].forEach(function (hour) {
@@ -821,9 +841,10 @@
             tick.textContent = formatHour(hour).slice(0, 2);
             axis.appendChild(tick);
           });
-          card.appendChild(track);
-          card.appendChild(axis);
-          (group.fields[0] === "safe" ? dock : root).appendChild(card);
+          grid.appendChild(document.createElement("span"));
+          grid.appendChild(axis);
+          card.appendChild(grid);
+          dock.appendChild(card);
           charts.push(null);
           return;
         }
@@ -832,7 +853,7 @@
         var canvas = document.createElement("canvas");
         box.appendChild(canvas);
         card.appendChild(box);
-        (group.fields[0] === "safe" ? dock : root).appendChild(card);
+        root.appendChild(card);
         var points = [];
         group.fields.forEach(function (name) {
           (series[name] || []).forEach(function (point) { points.push(point); });
@@ -917,6 +938,7 @@
 
     function infoKey(group) {
       if (group.fields.indexOf("wind") !== -1) return "wind";
+      if (group.fields.length > 1 && isStatusGroup(group)) return "status";
       return group.fields[0];
     }
 
@@ -939,6 +961,7 @@
       if (group.fields.indexOf("wind") !== -1 && group.fields.indexOf("gust") !== -1) {
         return fieldTitle("wind", group.title);
       }
+      if (group.fields.length > 1 && isStatusGroup(group)) return fieldTitle("status", group.title);
       return fieldTitle(group.fields[0], group.title);
     }
 
@@ -1004,7 +1027,9 @@
           }
         }
         if (card && card.dataset.binary) {
-          fillBinary(card.querySelector(".binary-track"), series[group.fields[0]]);
+          card.querySelectorAll(".binary-track").forEach(function (track) {
+            fillBinary(track, series[track.dataset.field]);
+          });
           return;
         }
         var chart = charts[index];
