@@ -57,6 +57,20 @@ When systemd is running, the script enables:
 
 Otherwise it prints the two commands to run under any supervisor.
 
+## Deploy
+
+Pushes to `main` update a checkout on the server and restart the app. The GitHub Action only SSHes in; it does not use sudo. The programs then run as your login's systemd user services, so a later push can restart them.
+
+Once, on the server, from that checkout:
+
+```sh
+sudo sh deploy/handoff.sh
+```
+
+That stops the root system units, grants your login access to the database and env files, and enables the user services. `deploy/install.sh` will not start the system units again after this.
+
+The action needs these repository secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT`, `DEPLOY_SSH_KEY`. The key's public half is an `authorized_keys` entry whose command is `deploy/deploy.sh`. The server pulls with a read-only deploy key at `~/.ssh/cloudwatcher_repo`.
+
 Check that the Solo is publishing:
 
 ```sh

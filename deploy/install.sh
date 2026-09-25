@@ -164,8 +164,12 @@ if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
   render "$ROOT/deploy/cloudwatcher-collector.service" /etc/systemd/system/cloudwatcher-collector.service
   render "$ROOT/deploy/cloudwatcher-web.service" /etc/systemd/system/cloudwatcher-web.service
   systemctl daemon-reload
-  systemctl enable cloudwatcher-collector.service cloudwatcher-web.service
-  systemctl restart cloudwatcher-collector.service cloudwatcher-web.service
+  if [ -f "$CONFIG_DIR/user-services" ]; then
+    echo "User services are active ($CONFIG_DIR/user-services); system units were not started."
+  else
+    systemctl enable cloudwatcher-collector.service cloudwatcher-web.service
+    systemctl restart cloudwatcher-collector.service cloudwatcher-web.service
+  fi
 else
   echo "systemd is not running. Start the programs under any supervisor:" >&2
   echo "  set -a; . $CONFIG_DIR/collector.env; set +a; $PREFIX/venv/bin/python $PREFIX/collector.py" >&2

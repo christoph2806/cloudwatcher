@@ -1,0 +1,14 @@
+[Unit]
+Description=CloudWatcher MQTT collector
+
+[Service]
+Type=simple
+WorkingDirectory=@CHECKOUT@
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=@CONFIG_DIR@/collector.env
+ExecStart=@CHECKOUT@/.venv/bin/python @CHECKOUT@/collector.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
