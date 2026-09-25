@@ -570,7 +570,7 @@
     function switchLimit(name) {
       var value = null;
       fieldSpec(name).lines.forEach(function (line) {
-        if (line.id === "unsafe" && isFinite(line.value) && Math.abs(line.value) < 900) value = line.value;
+        if (line.id === "unsafe" && isFinite(line.value)) value = line.value;
       });
       return value;
     }
