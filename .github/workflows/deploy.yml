@@ -16,6 +16,6 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           port: ${{ secrets.DEPLOY_PORT }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          fingerprint: SHA256:Q1efOC0+5EL3dD/u5I2EyJgf4Dvmj4Mr8hd7qqpm0B8
+          fingerprint: SHA256:9Xh3sPcYFu8apuNLlmKqFZ4lYumnWNaz7cFxT9fI8T0
           command_timeout: 5m
           script: deploy
