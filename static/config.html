@@ -5,28 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="pageSettings">CloudWatcher settings</title>
   <style>
-    :root { color-scheme: light; }
+    :root { color-scheme: dark; }
+    html {
+      min-height: 100%;
+      background: #071018 url("/static/backdrop.jpg") center center / cover no-repeat fixed;
+    }
     body {
       margin: 0 auto;
       max-width: 960px;
       padding: 16px;
       font-family: system-ui, sans-serif;
-      color: #1a1a1a;
-      background: #f6f7f9;
+      color: #eef3f8;
+      background: transparent;
     }
-    h1 { font-size: 1.4rem; }
-    h2 { font-size: 1.05rem; margin: 20px 0 8px; }
-    a { color: #1f4e79; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo { height: 2rem; width: auto; display: block; }
+    h1 { font-size: 2rem; line-height: 1; margin: 0; color: #f4f7fb; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+    h2 { font-size: 1.05rem; margin: 20px 0 8px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+    a { color: #d6e8ff; }
+    a.nav { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
     #fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 8px; }
     #fields label { display: flex; align-items: center; gap: 6px; min-height: 32px; }
     fieldset {
-      background: #fff;
-      border: 1px solid #e1e4ea;
+      background: linear-gradient(to bottom, rgba(12, 20, 34, 0.97), rgba(32, 52, 80, 0.97));
+      border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 10px;
       margin: 0 0 12px;
-      padding: 8px 12px 12px;
+      padding: 12px;
     }
-    legend { font-weight: 600; padding: 0 6px; }
+    .card-title { margin: 0 0 10px; font-size: 1rem; font-weight: 600; color: #f4f7fb; }
     .grid {
       display: grid;
       grid-template-columns: 14rem 9rem;
@@ -42,8 +50,10 @@
       width: 100%;
       height: 28px;
       padding: 0 8px;
-      border: 1px solid #c5c9d1;
+      border: 1px solid #6d7d90;
       border-radius: 6px;
+      background: #152033;
+      color: #eef3f8;
     }
     .swatch { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
     button {
@@ -51,9 +61,10 @@
       font-size: 16px;
       height: 36px;
       padding: 0 14px;
-      border: 1px solid #c5c9d1;
+      border: 1px solid #6d7d90;
       border-radius: 8px;
-      background: #fff;
+      background: #152033;
+      color: #eef3f8;
       cursor: pointer;
     }
     #msg { min-height: 1.4em; }
@@ -64,15 +75,24 @@
       font-size: 16px;
       height: 36px;
       padding: 0 8px;
-      border: 1px solid #c5c9d1;
+      border: 1px solid #6d7d90;
       border-radius: 8px;
-      background: #fff;
+      background: #152033;
+      color: #eef3f8;
     }
+    .credit, .credit a { color: #c8cdd4; font-size: 12px; text-align: center; }
+    .credit { margin: 28px 0 8px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+    .credit a { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <p><a href="/" data-i18n="charts">Charts</a></p>
-  <h1 data-i18n="settings">Settings</h1>
+  <div class="top">
+    <div class="brand">
+      <img class="logo" src="/static/logo.png" alt="">
+      <h1 data-i18n="settings">Settings</h1>
+    </div>
+    <a class="nav" href="/" data-i18n="charts">Charts</a>
+  </div>
   <p class="lang-row">
     <label for="lang" data-i18n="language">Language</label>
     <select id="lang">
@@ -85,13 +105,12 @@
   <h2 data-i18n="limits">Limits</h2>
   <p data-i18n="limitsHelp">Defaults from the Solo. Empty fields are not drawn. A line far outside that day's values is omitted so the curve stays readable.</p>
   <form id="form"></form>
-  <p><button type="submit" form="form" data-i18n="save">Save</button></p>
   <p id="msg"></p>
+  <p class="credit">Photo by <a href="https://unsplash.com/@scottagoodwill?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Scott Goodwill</a> on <a href="https://unsplash.com/photos/night-sky-with-milky-way-observatory-and-people-stargazing-dU4dX1l0UFM?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Unsplash</a></p>
   <script src="/static/i18n.js"></script>
   <script>
     applyI18n();
-    var HIDDEN_KEY = "cloudwatcher-hidden-fields";
-    var settings = { limits: {} };
+    var settings = { limits: {}, hidden: [], lang: "" };
     var fieldList = [];
 
     function todayBerlin() {
@@ -104,15 +123,18 @@
     }
 
     function hiddenSet() {
-      try {
-        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"));
-      } catch (err) {
-        return new Set();
-      }
+      return new Set(settings.hidden || []);
     }
 
     function saveHidden(hidden) {
-      localStorage.setItem(HIDDEN_KEY, JSON.stringify(Array.from(hidden)));
+      settings.hidden = Array.from(hidden);
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hidden: settings.hidden })
+      }).then(function (response) { return response.json(); })
+        .then(function (body) { settings = body; })
+        .catch(function () {});
     }
 
     function fieldNames(series, order) {
@@ -169,9 +191,10 @@
         var spec = limits[field];
         var box = document.createElement("fieldset");
         box.dataset.field = field;
-        var legend = document.createElement("legend");
-        legend.textContent = fieldTitle(field, spec.title || field) + (spec.unit ? " (" + spec.unit + ")" : "");
-        box.appendChild(legend);
+        var heading = document.createElement("h3");
+        heading.className = "card-title";
+        heading.textContent = fieldTitle(field, spec.title || field) + (spec.unit ? " (" + spec.unit + ")" : "");
+        box.appendChild(heading);
         var grid = document.createElement("div");
         grid.className = "grid";
         function addRow(text, input, swatchColor) {
@@ -193,6 +216,13 @@
         ymax.id = field + "-ymax";
         ymax.dataset.role = "ymax";
         ymax.value = inputValue(spec.ymax);
+        var ymin = document.createElement("input");
+        ymin.type = "number";
+        ymin.step = "any";
+        ymin.id = field + "-ymin";
+        ymin.dataset.role = "ymin";
+        ymin.value = inputValue(spec.ymin);
+        addRow(t("chartMin"), ymin, null);
         addRow(t("chartMax"), ymax, null);
         (spec.lines || []).forEach(function (line) {
           var input = document.createElement("input");
@@ -216,7 +246,9 @@
         var spec = limits[field];
         if (!spec) return;
         var ymax = box.querySelector("[data-role=ymax]");
+        var ymin = box.querySelector("[data-role=ymin]");
         spec.ymax = ymax.value === "" ? null : Number(ymax.value);
+        spec.ymin = ymin.value === "" ? null : Number(ymin.value);
         box.querySelectorAll("[data-role=line]").forEach(function (input) {
           (spec.lines || []).forEach(function (line) {
             if (line.id === input.dataset.id) {
@@ -228,8 +260,8 @@
       return limits;
     }
 
-    document.getElementById("form").addEventListener("submit", function (event) {
-      event.preventDefault();
+    var saveTimer = null;
+    function saveLimits() {
       var msg = document.getElementById("msg");
       msg.textContent = t("saving");
       fetch("/api/settings", {
@@ -240,27 +272,52 @@
         if (!response.ok) throw new Error(t("saveFailed"));
         return response.json();
       }).then(function (body) {
-        settings = body;
-        render(body.limits);
+        settings.limits = body.limits;
         msg.textContent = t("saved");
       }).catch(function (err) {
         msg.textContent = err.message;
       });
+    }
+    document.getElementById("form").addEventListener("focusout", function (event) {
+      if (!event.target.matches("input")) return;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveLimits, 200);
     });
 
     var langSelect = document.getElementById("lang");
     langSelect.value = currentLang();
     langSelect.addEventListener("change", function () {
-      localStorage.setItem(LANG_KEY, langSelect.value);
+      setLanguage(langSelect.value);
       applyI18n();
       if (settings.limits) render(settings.limits);
       renderFields(fieldList);
+      fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lang: langSelect.value })
+      }).then(function (response) { return response.json(); })
+        .then(function (body) { settings = body; })
+        .catch(function () {});
     });
 
     fetch("/api/settings")
       .then(function (response) { return response.json(); })
       .then(function (body) {
         settings = body;
+        try {
+          var savedLang = localStorage.getItem("cloudwatcher-lang");
+          var savedHidden = localStorage.getItem("cloudwatcher-hidden-fields");
+          localStorage.removeItem("cloudwatcher-lang");
+          localStorage.removeItem("cloudwatcher-hidden-fields");
+          if (!body.lang && (savedLang === "de" || savedLang === "en")) body.lang = savedLang;
+          if ((!body.hidden || !body.hidden.length) && savedHidden) {
+            var parsed = JSON.parse(savedHidden);
+            if (parsed && parsed.length) body.hidden = parsed;
+          }
+        } catch (err) {}
+        if (body.lang) setLanguage(body.lang);
+        langSelect.value = currentLang();
+        applyI18n();
         render(body.limits);
         fetch("/api/data?date=" + encodeURIComponent(todayBerlin()))
           .then(function (response) { return response.json(); })

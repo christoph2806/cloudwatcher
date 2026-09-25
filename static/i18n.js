@@ -1,4 +1,4 @@
-var LANG_KEY = "cloudwatcher-lang";
+var currentLanguage = "";
 var I18N = {
   de: {
     "settings": "Einstellungen",
@@ -8,6 +8,7 @@ var I18N = {
     "today": "Heute",
     "next": "Folgetag",
     "date": "Datum",
+    "calendar": "Kalender",
     "noMessage": "keine Nachricht",
     "safeUnknown": "Safe —",
     "switchUnknown": "Switch —",
@@ -29,8 +30,12 @@ var I18N = {
     "saved": "Gespeichert.",
     "loadFailed": "Einstellungen konnten nicht geladen werden.",
     "noFields": "Keine Felder vorhanden.",
+    "chartMin": "Diagramm-Minimum",
     "chartMax": "Diagramm-Maximum",
     "diagrams": "Diagramme",
+    "limitIn": "innerhalb der Grenzwerte",
+    "limitOut": "außerhalb der Grenzwerte",
+    "limitUnknown": "kein Grenzwert",
     "limits": "Grenzwerte",
     "limitsHelp": "Voreinstellung aus der Solo. Leere Felder werden nicht gezeichnet. Eine Linie, die weit außerhalb der Werte des Tages liegt, entfällt, damit die Kurve lesbar bleibt.",
     "save": "Speichern",
@@ -87,6 +92,7 @@ var I18N = {
     "today": "Today",
     "next": "Next day",
     "date": "Date",
+    "calendar": "Calendar",
     "noMessage": "no message",
     "safeUnknown": "Safe —",
     "switchUnknown": "Switch —",
@@ -108,8 +114,12 @@ var I18N = {
     "saved": "Saved.",
     "loadFailed": "Settings could not be loaded.",
     "noFields": "No fields available.",
+    "chartMin": "Chart minimum",
     "chartMax": "Chart maximum",
     "diagrams": "Charts",
+    "limitIn": "within limits",
+    "limitOut": "out of limits",
+    "limitUnknown": "no limit",
     "limits": "Limits",
     "limitsHelp": "Defaults from the Solo. Empty fields are not drawn. A line far outside that day's values is omitted so the curve stays readable.",
     "save": "Save",
@@ -161,12 +171,13 @@ var I18N = {
 };
 
 function currentLang() {
-  try {
-    var saved = localStorage.getItem(LANG_KEY);
-    if (saved === "de" || saved === "en") return saved;
-  } catch (err) {}
+  if (currentLanguage === "de" || currentLanguage === "en") return currentLanguage;
   var nav = (navigator.language || "").toLowerCase();
   return nav.indexOf("de") === 0 ? "de" : "en";
+}
+
+function setLanguage(lang) {
+  currentLanguage = lang === "de" || lang === "en" ? lang : "";
 }
 
 function uiLocale() {

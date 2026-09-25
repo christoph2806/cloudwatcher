@@ -38,6 +38,9 @@ chmod 640 "$CONFIG_DIR/web.env" "$CONFIG_DIR/collector.env"
 
 if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
   systemctl disable --now cloudwatcher-web.service cloudwatcher-collector.service 2>/dev/null || true
+  # mask refuses to replace a real unit file, which is what install.sh writes.
+  rm -f /etc/systemd/system/cloudwatcher-web.service /etc/systemd/system/cloudwatcher-collector.service
+  systemctl daemon-reload
   systemctl mask cloudwatcher-web.service cloudwatcher-collector.service
 fi
 

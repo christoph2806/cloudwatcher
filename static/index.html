@@ -6,17 +6,32 @@
   <title data-i18n="pageCharts">CloudWatcher</title>
   <script src="/static/chart.umd.min.js"></script>
   <style>
-    :root { color-scheme: light; }
+    :root { color-scheme: dark; }
+    html {
+      min-height: 100%;
+      background: #071018 url("/static/backdrop.jpg") center center / cover no-repeat fixed;
+    }
     body {
       margin: 0 auto;
       max-width: 960px;
       padding: 16px;
       font-family: system-ui, sans-serif;
-      color: #1a1a1a;
-      background: #f6f7f9;
+      color: #eef3f8;
+      background: transparent;
+    }
+    .sticky-head {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      margin: -16px -16px 12px;
+      padding: 12px 16px 8px;
+      background: rgba(7, 16, 24, 0.94);
     }
     .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 12px; }
-    h1 { font-size: 1.4rem; margin: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .logo { height: 2rem; width: auto; display: block; }
+    h1 { font-size: 2rem; line-height: 1; margin: 0; color: #f4f7fb; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+    .live, .count { color: #f4f7fb; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
     .live { display: flex; align-items: center; gap: 8px; margin: 0; font-variant-numeric: tabular-nums; }
     .led {
       width: 16px;
@@ -28,38 +43,41 @@
     .led.green { color: #1f9d3a; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #1f9d3a; }
     .led.yellow { color: #e0a100; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #e0a100; }
     .led.red { color: #d1242f; box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.35), 0 0 8px #d1242f; }
-    .led.off { color: #c5c9d1; box-shadow: none; }
+    .led.off { color: #8b95a3; box-shadow: none; }
     .flags { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
-    .binary-track { position: relative; height: 22px; background: #e7eaee; border-radius: 6px; overflow: hidden; }
+    .binary-track { position: relative; height: 22px; background: rgba(255, 255, 255, 0.12); border-radius: 6px; overflow: hidden; }
     .binary-track .seg { position: absolute; top: 0; bottom: 0; }
     .binary-track .seg.on { background: #1f9d3a; }
     .binary-track .seg.off { background: #d1242f; }
-    .binary-axis { display: flex; justify-content: space-between; margin-top: 4px; color: #667; font-size: 12px; }
-    .reading.on { color: #1f9d3a; }
-    .reading.off { color: #d1242f; }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
-    button, input[type="date"] {
+    .binary-axis { display: flex; justify-content: space-between; margin-top: 4px; color: #d5dbe3; font-size: 12px; }
+    .reading.on { color: #5dce73; }
+    .reading.off { color: #ff6b74; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    #safe-dock .chart-card { margin-bottom: 0; }
+    button, input[type="date"], input.date-text {
       box-sizing: border-box;
       font: inherit;
       font-size: 16px;
       height: 44px;
       padding: 0 12px;
-      border: 1px solid #c5c9d1;
+      border: 1px solid #6d7d90;
       border-radius: 8px;
-      background: #fff;
+      background: #152033;
+      color: #eef3f8;
     }
     button { cursor: pointer; }
     .count { margin: 0; font-variant-numeric: tabular-nums; }
     #status { margin: 0 0 12px; }
     #status:empty { display: none; }
     .chart-card {
-      background: #fff;
-      border: 1px solid #e1e4ea;
+      background: linear-gradient(to bottom, rgba(12, 20, 34, 0.97), rgba(32, 52, 80, 0.97));
+      border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 10px;
       padding: 12px;
       margin-bottom: 12px;
     }
     .chart-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .chart-led { flex: 0 0 auto; }
     .chart-head h2 { font-size: 1rem; margin: 0; font-weight: 600; flex: 1; }
     button.info {
       width: 18px;
@@ -71,7 +89,9 @@
       font-size: 12px;
       font-weight: 700;
       line-height: 16px;
-      color: #1f4e79;
+      color: #d6e6ff;
+      background: #152033;
+      border-color: #8fb4e0;
       vertical-align: 1px;
     }
     .modal {
@@ -87,29 +107,71 @@
     .modal[hidden] { display: none; }
     .modal-card {
       width: min(32rem, 100%);
-      background: #fff;
+      background: #121a28;
+      color: #eef3f8;
+      border: 1px solid rgba(255, 255, 255, 0.16);
       border-radius: 10px;
       padding: 16px;
     }
     .modal-card h2 { margin: 0 0 8px; font-size: 1.1rem; }
     .modal-card p { margin: 0 0 16px; line-height: 1.45; }
-    .reading { font-weight: 500; color: #1f4e79; margin-left: 8px; }
+    .reading { font-weight: 500; color: #9ecbff; margin-left: 8px; }
     .order { display: flex; gap: 4px; margin-left: auto; }
     .order button { height: 36px; min-width: 40px; padding: 0 8px; }
-    a.nav { align-self: center; }
+    a.nav { align-self: center; color: #d6e8ff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85); }
     .chart-box { position: relative; height: 220px; }
     .empty {
-      background: #fff;
-      border: 1px dashed #c5c9d1;
+      background: rgba(8, 16, 28, 0.88);
+      border: 1px dashed rgba(255, 255, 255, 0.28);
       border-radius: 10px;
       padding: 24px 16px;
       text-align: center;
+      color: #eef3f8;
     }
+    .credit, .credit a {
+      color: #c8cdd4;
+      font-size: 12px;
+      text-align: center;
+    }
+    .credit { margin: 28px 0 8px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9); }
+    .credit a { text-decoration: underline; }
+    .date-control { position: relative; display: inline-flex; align-items: center; }
+    .date-control .date-text,
+    .date-control .date-pick,
+    .date-control .date-pop { display: none; }
+    .date-control.de .date-text { display: block; width: 8.5rem; border-radius: 8px 0 0 8px; }
+    .date-control.de .date-pick { display: inline-flex; align-items: center; justify-content: center; width: 44px; border-radius: 0 8px 8px 0; margin-left: -1px; }
+    .date-control.de input[type="date"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .date-pop {
+      position: absolute;
+      top: 48px;
+      left: 0;
+      z-index: 30;
+      width: 16.5rem;
+      padding: 8px;
+      background: #121a28;
+      color: #eef3f8;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 10px;
+    }
+    .date-control.de .date-pop.open { display: block; }
+    .date-pop-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .date-pop-head span { flex: 1; text-align: center; text-transform: capitalize; }
+    .date-pop button { height: 32px; min-width: 0; padding: 0; font-size: 14px; }
+    .date-pop-head button { width: 32px; }
+    .date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+    .date-dow { text-align: center; font-size: 12px; color: #c8cdd4; line-height: 32px; }
+    .date-grid button.selected { background: #1f4e79; }
+    .date-grid button.today { border-color: #9ecbff; }
   </style>
 </head>
 <body>
+  <div class="sticky-head">
   <div class="top">
-    <h1>CloudWatcher</h1>
+    <div class="brand">
+      <img class="logo" src="/static/logo.png" alt="">
+      <h1>CloudWatcher</h1>
+    </div>
     <div class="flags">
       <p class="count" id="count"></p>
       <p class="live"><span id="led-safe" class="led off" aria-hidden="true"></span><span id="text-safe" data-i18n="safeUnknown">Safe —</span></p>
@@ -119,11 +181,18 @@
   </div>
   <div class="toolbar">
     <button type="button" id="prev" data-i18n="prev">Previous day</button>
-    <input type="date" id="date" data-i18n-aria="date" aria-label="Date">
+    <div class="date-control" id="date-control">
+      <input type="text" id="date-text" class="date-text" inputmode="numeric" maxlength="10" autocomplete="off" spellcheck="false" placeholder="TT.MM.JJJJ" data-i18n-aria="date" aria-label="Datum">
+      <button type="button" id="date-pick" class="date-pick" data-i18n-aria="calendar" aria-label="Kalender">▾</button>
+      <div id="date-pop" class="date-pop"></div>
+      <input type="date" id="date" data-i18n-aria="date" aria-label="Date">
+    </div>
     <button type="button" id="today" data-i18n="today">Today</button>
     <a class="nav" href="/config" data-i18n="settings">Settings</a>
   </div>
   <p id="status"></p>
+  <div id="safe-dock"></div>
+  </div>
   <main id="charts"></main>
   <div id="info-modal" class="modal" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="info-title">
@@ -132,15 +201,16 @@
       <button type="button" id="info-close" data-i18n="close">Close</button>
     </div>
   </div>
+  <p class="credit">Photo by <a href="https://unsplash.com/@scottagoodwill?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Scott Goodwill</a> on <a href="https://unsplash.com/photos/night-sky-with-milky-way-observatory-and-people-stargazing-dU4dX1l0UFM?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Unsplash</a></p>
   <script src="/static/i18n.js"></script>
   <script>
     applyI18n();
+    syncDateControl();
     // Combine fields into one chart once a sample message documents the schema.
     var FIELD_GROUPS = [{ title: "Wind", fields: ["wind", "gust"] }];
-    var COLORS = ["#1f4e79", "#c45911", "#548235", "#7030a0", "#1a6b7a"];
-    var HIDDEN_KEY = "cloudwatcher-hidden-fields";
+    var COLORS = ["#8ec5ff", "#f0a36a", "#7dce72", "#c9a0f0", "#7fd0d8"];
     var charts = [];
-    var settings = { order: [], limits: {} };
+    var settings = { order: [], hidden: [], lang: "", limits: {} };
     var lastPayload = null;
 
     function todayBerlin() {
@@ -152,6 +222,127 @@
       }).format(new Date());
     }
 
+    function pad2(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function isoToGerman(iso) {
+      var parts = String(iso || "").split("-");
+      if (parts.length !== 3) return "";
+      return parts[2] + "." + parts[1] + "." + parts[0];
+    }
+
+    function germanToIso(text) {
+      var match = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(text || "").trim());
+      if (!match) return "";
+      var day = Number(match[1]);
+      var month = Number(match[2]);
+      var year = Number(match[3]);
+      var dt = new Date(Date.UTC(year, month - 1, day));
+      if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) return "";
+      return year + "-" + pad2(month) + "-" + pad2(day);
+    }
+
+    function syncDateControl() {
+      var box = document.getElementById("date-control");
+      if (!box) return;
+      var german = currentLang() === "de";
+      box.classList.toggle("de", german);
+      var native = document.getElementById("date");
+      native.tabIndex = german ? -1 : 0;
+      if (german) native.setAttribute("aria-hidden", "true");
+      else native.removeAttribute("aria-hidden");
+      var iso = native.value;
+      if (iso) document.getElementById("date-text").value = isoToGerman(iso);
+    }
+
+    var popMonth = { y: 2026, m: 0 };
+
+    function closeDatePop() {
+      document.getElementById("date-pop").classList.remove("open");
+    }
+
+    function renderDatePop() {
+      var pop = document.getElementById("date-pop");
+      pop.textContent = "";
+      var year = popMonth.y;
+      var month = popMonth.m;
+      var head = document.createElement("div");
+      head.className = "date-pop-head";
+      var prev = document.createElement("button");
+      prev.type = "button";
+      prev.textContent = "‹";
+      prev.addEventListener("click", function (event) {
+        event.stopPropagation();
+        popMonth.m -= 1;
+        if (popMonth.m < 0) { popMonth.m = 11; popMonth.y -= 1; }
+        renderDatePop();
+      });
+      var label = document.createElement("span");
+      label.textContent = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" }).format(new Date(year, month, 1));
+      var next = document.createElement("button");
+      next.type = "button";
+      next.textContent = "›";
+      next.addEventListener("click", function (event) {
+        event.stopPropagation();
+        popMonth.m += 1;
+        if (popMonth.m > 11) { popMonth.m = 0; popMonth.y += 1; }
+        renderDatePop();
+      });
+      head.appendChild(prev);
+      head.appendChild(label);
+      head.appendChild(next);
+      var grid = document.createElement("div");
+      grid.className = "date-grid";
+      ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].forEach(function (name) {
+        var cell = document.createElement("span");
+        cell.className = "date-dow";
+        cell.textContent = name;
+        grid.appendChild(cell);
+      });
+      var pad = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7;
+      var count = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      var selected = document.getElementById("date").value;
+      var today = todayBerlin();
+      var i;
+      for (i = 0; i < pad; i++) grid.appendChild(document.createElement("span"));
+      for (var day = 1; day <= count; day++) {
+        var iso = year + "-" + pad2(month + 1) + "-" + pad2(day);
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = String(day);
+        if (iso === selected) button.classList.add("selected");
+        if (iso === today) button.classList.add("today");
+        button.addEventListener("click", function (picked) {
+          return function (event) {
+            event.stopPropagation();
+            closeDatePop();
+            load(picked);
+          };
+        }(iso));
+        grid.appendChild(button);
+      }
+      pop.appendChild(head);
+      pop.appendChild(grid);
+    }
+
+    function openDatePop() {
+      var iso = document.getElementById("date").value || todayBerlin();
+      var parts = iso.split("-").map(Number);
+      popMonth = { y: parts[0], m: parts[1] - 1 };
+      renderDatePop();
+      document.getElementById("date-pop").classList.add("open");
+    }
+
+    function commitGermanDate() {
+      var iso = germanToIso(document.getElementById("date-text").value);
+      if (!iso) {
+        document.getElementById("date-text").value = isoToGerman(document.getElementById("date").value);
+        return;
+      }
+      if (iso !== document.getElementById("date").value) load(iso);
+    }
+
     function shift(dateStr, days) {
       var parts = dateStr.split("-").map(Number);
       var dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
@@ -160,16 +351,14 @@
     }
 
     function hiddenSet() {
-      try {
-        return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY) || "[]"));
-      } catch (err) {
-        return new Set();
-      }
+      return new Set(settings.hidden || []);
     }
 
     function formatHour(h) {
       if (h == null || isNaN(h)) return "";
-      var totalMin = Math.round(h * 60);
+      var shifted = h >= 24 ? 12 : (h + 12) % 24;
+      var totalMin = Math.round(shifted * 60);
+      if (totalMin >= 24 * 60) totalMin = 0;
       var hh = Math.floor(totalMin / 60);
       var mm = totalMin % 60;
       return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
@@ -317,12 +506,25 @@
       }).map(function (line) {
         return { id: line.id, label: line.label, value: Number(line.value), color: line.color || "#666" };
       });
+      var ymin = spec.ymin == null || spec.ymin === "" ? null : Number(spec.ymin);
       var ymax = spec.ymax == null || spec.ymax === "" ? null : Number(spec.ymax);
+      if (ymin != null && !isFinite(ymin)) ymin = null;
       if (ymax != null && !isFinite(ymax)) ymax = null;
-      return { lines: lines, ymax: ymax, unit: spec.unit || "" };
+      return { lines: lines, ymin: ymin, ymax: ymax, unit: spec.unit || "" };
     }
 
     function visibleLimit(points, spec) {
+      var fixedMin = spec.ymin != null;
+      var fixedMax = spec.ymax != null;
+      if (fixedMin && fixedMax) {
+        return {
+          lines: spec.lines.filter(function (line) {
+            return line.value >= spec.ymin && line.value <= spec.ymax;
+          }),
+          min: spec.ymin,
+          max: spec.ymax
+        };
+      }
       var ys = [];
       (points || []).forEach(function (point) {
         if (point[1] != null && isFinite(point[1])) ys.push(point[1]);
@@ -332,26 +534,65 @@
       var dataMax = Math.max.apply(null, ys);
       var span = Math.max(dataMax - dataMin, 1);
       var pad = Math.max(span * 8, 50, Math.abs(dataMax) * 0.2);
-      var lo = dataMin;
-      var hi = dataMax;
-      var kept;
-      if (spec.ymax != null) {
-        hi = spec.ymax;
-        lo = Math.min(dataMin, 0);
-        kept = spec.lines.filter(function (line) {
-          return line.value >= lo && line.value <= hi;
-        });
-      } else {
-        kept = spec.lines.filter(function (line) {
-          return line.value >= dataMin - pad && line.value <= dataMax + pad;
-        });
+      var lo = fixedMin ? spec.ymin : dataMin;
+      var hi = fixedMax ? spec.ymax : dataMax;
+      var kept = spec.lines.filter(function (line) {
+        return line.value >= (fixedMin ? lo : dataMin - pad) && line.value <= (fixedMax ? hi : dataMax + pad);
+      });
+      if (!fixedMin || !fixedMax) {
         kept.forEach(function (line) {
-          lo = Math.min(lo, line.value);
-          hi = Math.max(hi, line.value);
+          if (!fixedMin) lo = Math.min(lo, line.value);
+          if (!fixedMax) hi = Math.max(hi, line.value);
         });
       }
       var extra = Math.max((hi - lo) * 0.06, 0.5);
-      return { lines: kept, min: lo - extra, max: spec.ymax != null ? spec.ymax : hi + extra };
+      return {
+        lines: kept,
+        min: fixedMin ? spec.ymin : lo - extra,
+        max: fixedMax ? spec.ymax : hi + extra
+      };
+    }
+
+    function alarmLimit(name) {
+      var lines = fieldSpec(name).lines;
+      var unsafe = null;
+      var red = null;
+      lines.forEach(function (line) {
+        if (line.id === "unsafe" && isFinite(line.value)) unsafe = line.value;
+        if (String(line.color).toLowerCase() === "#d1242f" && isFinite(line.value) && Math.abs(line.value) < 900) red = line.value;
+      });
+      return unsafe != null ? unsafe : red;
+    }
+
+    function readingOutside(name, value) {
+      if (value == null || isNaN(value)) return null;
+      if (name === "safe" || name === "switch") return value < 0.5;
+      var limit = alarmLimit(name);
+      if (limit == null) return null;
+      if (name === "rain" || name === "light") return value < limit;
+      return value > limit;
+    }
+
+    function chartLedState(group, series) {
+      var known = false;
+      var outside = false;
+      group.fields.forEach(function (name) {
+        var state = readingOutside(name, lastReading(series[name]));
+        if (state == null) return;
+        known = true;
+        if (state) outside = true;
+      });
+      if (!known) return "off";
+      return outside ? "red" : "green";
+    }
+
+    function paintChartLed(led, group, series) {
+      var state = chartLedState(group, series);
+      led.className = "led chart-led " + state;
+      var label = state === "red" ? t("limitOut") : state === "green" ? t("limitIn") : t("limitUnknown");
+      led.setAttribute("role", "img");
+      led.setAttribute("aria-label", label);
+      led.title = label;
     }
 
     function readingText(group, series) {
@@ -388,7 +629,9 @@
     function renderCharts(series, hidden) {
       destroyCharts();
       var root = document.getElementById("charts");
+      var dock = document.getElementById("safe-dock");
       root.textContent = "";
+      dock.textContent = "";
       var visibleGroups = chartGroups(series).filter(function (group) {
         return group.fields.some(function (name) { return !hidden.has(name); });
       }).map(function (group) {
@@ -406,17 +649,15 @@
         return;
       }
       var maxX = 24;
-      Object.keys(series).forEach(function (name) {
-        series[name].forEach(function (point) {
-          if (point[0] > maxX) maxX = Math.ceil(point[0]);
-        });
-      });
       visibleGroups.forEach(function (group, groupIndex) {
         var card = document.createElement("section");
         card.className = "chart-card";
         card.dataset.field = group.fields[0];
         var head = document.createElement("div");
         head.className = "chart-head";
+        var led = document.createElement("span");
+        paintChartLed(led, group, series);
+        head.appendChild(led);
         var title = document.createElement("h2");
         title.appendChild(document.createTextNode(chartTitle(group)));
         var info = document.createElement("button");
@@ -458,12 +699,12 @@
           axis.className = "binary-axis";
           [0, 4, 8, 12, 16, 20, 24].forEach(function (hour) {
             var tick = document.createElement("span");
-            tick.textContent = String(hour).padStart(2, "0");
+            tick.textContent = formatHour(hour).slice(0, 2);
             axis.appendChild(tick);
           });
           card.appendChild(track);
           card.appendChild(axis);
-          root.appendChild(card);
+          (group.fields[0] === "safe" ? dock : root).appendChild(card);
           charts.push(null);
           return;
         }
@@ -472,7 +713,7 @@
         var canvas = document.createElement("canvas");
         box.appendChild(canvas);
         card.appendChild(box);
-        root.appendChild(card);
+        (group.fields[0] === "safe" ? dock : root).appendChild(card);
         var points = [];
         group.fields.forEach(function (name) {
           (series[name] || []).forEach(function (point) { points.push(point); });
@@ -507,7 +748,12 @@
             order: 0
           };
         }).concat(limitDatasets(group.fields[0], scale.lines, maxX));
-        var yScale = { beginAtZero: false };
+        var yScale = {
+          beginAtZero: false,
+          ticks: { color: "#d5dbe3" },
+          grid: { color: "rgba(255,255,255,0.16)" },
+          border: { color: "rgba(255,255,255,0.28)" }
+        };
         if (scale.min != null) yScale.min = scale.min;
         if (scale.max != null) yScale.max = scale.max;
         if (group.fields.every(function (name) { return name === "light" || name === "rain"; })) {
@@ -521,7 +767,7 @@
             maintainAspectRatio: false,
             animation: false,
             plugins: {
-              legend: { display: datasets.length > 1 },
+              legend: { display: datasets.length > 1, labels: { color: "#d5dbe3" } },
               tooltip: {
                 callbacks: {
                   title: function (items) { return formatHour(items[0].parsed.x); }
@@ -533,7 +779,9 @@
                 type: "linear",
                 min: 0,
                 max: maxX,
-                ticks: { stepSize: 2, callback: formatHour }
+                ticks: { stepSize: 4, color: "#d5dbe3", callback: formatHour },
+                grid: { color: "rgba(255,255,255,0.16)" },
+                border: { color: "rgba(255,255,255,0.28)" }
               },
               y: yScale
             }
@@ -595,15 +843,7 @@
       var age = Date.now() - lastMessageAt;
       var state = age < 60000 ? "green" : age < 120000 ? "yellow" : "red";
       led.className = "led " + state;
-      label.textContent = new Intl.DateTimeFormat(uiLocale(), {
-        timeZone: "Europe/Berlin",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      }).format(new Date(lastMessageAt));
+      label.textContent = formatStamp(new Date(lastMessageAt));
     }
 
     function visibleGroups(series, hidden) {
@@ -623,22 +863,17 @@
       }).join("|");
     }
 
-    function axisMax(series) {
-      var maxX = 24;
-      Object.keys(series).forEach(function (name) {
-        series[name].forEach(function (point) {
-          if (point[0] > maxX) maxX = Math.ceil(point[0]);
-        });
-      });
-      return maxX;
+    function axisMax() {
+      return 24;
     }
 
     function updateCharts(series, hidden) {
       var groups = visibleGroups(series, hidden);
       var maxX = axisMax(series);
-      var cards = document.querySelectorAll("#charts .chart-card");
       groups.forEach(function (group, index) {
-        var card = cards[index];
+        var card = document.querySelector('.chart-card[data-field="' + group.fields[0] + '"]');
+        var led = card ? card.querySelector(".chart-led") : null;
+        if (led) paintChartLed(led, group, series);
         var reading = card ? card.querySelector(".reading") : null;
         if (reading) {
           reading.textContent = readingText(group, series);
@@ -748,8 +983,26 @@
       chartSignature = signatureFor(currentSeries, hidden);
     }
 
+    function formatStamp(date) {
+      var parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/Berlin",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(date);
+      var map = {};
+      parts.forEach(function (part) { map[part.type] = part.value; });
+      var sep = currentLang() === "de" ? "." : "/";
+      return map.day + sep + map.month + sep + map.year + ", " + map.hour + ":" + map.minute + ":" + map.second;
+    }
+
     function load(date, quiet) {
       document.getElementById("date").value = date;
+      document.getElementById("date-text").value = isoToGerman(date);
       if (!quiet) setStatus(t("loading"));
       fetch("/api/data?date=" + encodeURIComponent(date))
         .then(function (response) {
@@ -782,10 +1035,50 @@
     document.getElementById("date").addEventListener("change", function (event) {
       if (event.target.value) load(event.target.value);
     });
+    document.getElementById("date-text").addEventListener("change", commitGermanDate);
+    document.getElementById("date-text").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        commitGermanDate();
+      }
+    });
+    document.getElementById("date-pick").addEventListener("click", function (event) {
+      event.stopPropagation();
+      if (document.getElementById("date-pop").classList.contains("open")) closeDatePop();
+      else openDatePop();
+    });
+    document.addEventListener("click", function (event) {
+      if (!document.getElementById("date-pop").classList.contains("open")) return;
+      if (!document.getElementById("date-control").contains(event.target)) closeDatePop();
+    });
+
+    function drainLocal(server) {
+      var patch = {};
+      try {
+        var lang = localStorage.getItem("cloudwatcher-lang");
+        var hiddenRaw = localStorage.getItem("cloudwatcher-hidden-fields");
+        localStorage.removeItem("cloudwatcher-lang");
+        localStorage.removeItem("cloudwatcher-hidden-fields");
+        if (!server.lang && (lang === "de" || lang === "en")) patch.lang = lang;
+        if ((!server.hidden || !server.hidden.length) && hiddenRaw) {
+          var hidden = JSON.parse(hiddenRaw);
+          if (hidden && hidden.length) patch.hidden = hidden;
+        }
+      } catch (err) {}
+      return patch;
+    }
 
     fetch("/api/settings")
       .then(function (response) { return response.json(); })
-      .then(function (body) { settings = body; })
+      .then(function (body) {
+        settings = body;
+        var patch = drainLocal(body);
+        if (patch.lang) setLanguage(patch.lang);
+        else if (body.lang) setLanguage(body.lang);
+        applyI18n();
+        syncDateControl();
+        if (patch.lang || patch.hidden) return saveSettings(patch);
+      })
       .catch(function () {})
       .then(function () { load(todayBerlin()); });
     paintLed();

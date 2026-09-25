@@ -28,7 +28,8 @@ DEFAULT_LIMITS = {
     "clouds": {
         "title": "Himmelstemperatur",
         "unit": "°C",
-        "ymax": None,
+        "ymin": -40,
+        "ymax": 40,
         "lines": [
             {"id": "clear", "label": "Klar", "value": -15, "color": GREEN},
             {"id": "cloudy", "label": "Bewölkt", "value": -5, "color": YELLOW},
@@ -39,7 +40,8 @@ DEFAULT_LIMITS = {
     "wind": {
         "title": "Wind",
         "unit": "km/h",
-        "ymax": None,
+        "ymin": 0,
+        "ymax": 60,
         "lines": [
             {"id": "calm", "label": "Ruhig", "value": 5, "color": GREEN},
             {"id": "windy", "label": "Windig", "value": 30, "color": YELLOW},
@@ -50,7 +52,8 @@ DEFAULT_LIMITS = {
     "gust": {
         "title": "Böen",
         "unit": "km/h",
-        "ymax": None,
+        "ymin": 0,
+        "ymax": 60,
         "lines": [
             {"id": "calm", "label": "Ruhig", "value": 5, "color": GREEN},
             {"id": "windy", "label": "Windig", "value": 30, "color": YELLOW},
@@ -60,6 +63,7 @@ DEFAULT_LIMITS = {
     "rain": {
         "title": "Regen",
         "unit": "",
+        "ymin": 0,
         "ymax": 5000,
         "lines": [
             {"id": "dry", "label": "Trocken", "value": 3900, "color": GREEN},
@@ -71,7 +75,8 @@ DEFAULT_LIMITS = {
     "light": {
         "title": "Helligkeit",
         "unit": "",
-        "ymax": 65000,
+        "ymin": 0,
+        "ymax": 80000,
         "lines": [
             {"id": "dark", "label": "Dunkel", "value": 75000, "color": GREEN},
             {"id": "light", "label": "Hell", "value": 250, "color": YELLOW},
@@ -82,6 +87,7 @@ DEFAULT_LIMITS = {
     "abspress": {
         "title": "Absolutdruck",
         "unit": "Pa",
+        "ymin": None,
         "ymax": None,
         "lines": [
             {"id": "low", "label": "Niedrig", "value": None, "color": GREEN},
@@ -93,6 +99,7 @@ DEFAULT_LIMITS = {
     "relpress": {
         "title": "Relativdruck",
         "unit": "Pa",
+        "ymin": None,
         "ymax": None,
         "lines": [
             {"id": "low", "label": "Niedrig", "value": None, "color": GREEN},
@@ -100,6 +107,20 @@ DEFAULT_LIMITS = {
             {"id": "high", "label": "Hoch", "value": None, "color": RED},
             {"id": "unsafe", "label": "Schalter", "value": 1000, "color": SWITCH},
         ],
+    },
+    "temp": {
+        "title": "Temperatur",
+        "unit": "°C",
+        "ymin": -20,
+        "ymax": 40,
+        "lines": [],
+    },
+    "rawir": {
+        "title": "Raw Infrared",
+        "unit": "°C",
+        "ymin": -40,
+        "ymax": 40,
+        "lines": [],
     },
 }
 
@@ -167,8 +188,10 @@ def merge_limits(saved):
         if not isinstance(field, str) or not isinstance(spec, dict):
             continue
         base = merged.setdefault(
-            field, {"title": field, "unit": "", "ymax": None, "lines": []}
+            field, {"title": field, "unit": "", "ymin": None, "ymax": None, "lines": []}
         )
+        if "ymin" in spec:
+            base["ymin"] = _clean_number(spec.get("ymin"))
         if "ymax" in spec:
             base["ymax"] = _clean_number(spec.get("ymax"))
         incoming = spec.get("lines")
@@ -211,10 +234,20 @@ def read_raw_settings(conn):
     return data
 
 
+def _name_list(value):
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
 def public_settings(raw):
-    order = raw.get("order") if isinstance(raw.get("order"), list) else []
-    order = [item for item in order if isinstance(item, str)]
-    return {"order": order, "limits": merge_limits(raw.get("limits"))}
+    lang = raw.get("lang") if raw.get("lang") in ("de", "en") else ""
+    return {
+        "order": _name_list(raw.get("order")),
+        "hidden": _name_list(raw.get("hidden")),
+        "lang": lang,
+        "limits": merge_limits(raw.get("limits")),
+    }
 
 
 def write_settings(conn, raw):
@@ -244,6 +277,20 @@ def apply_settings(conn, payload):
         # Validate numbers before storing. Unknown fields are kept.
         merge_limits(limits)
         raw["limits"] = limits
+    if "hidden" in payload:
+        hidden = payload["hidden"]
+        if (
+            not isinstance(hidden, list)
+            or len(hidden) > 200
+            or not all(isinstance(item, str) and len(item) <= 80 for item in hidden)
+        ):
+            raise ValueError("hidden must be a list of field names")
+        raw["hidden"] = hidden
+    if "lang" in payload:
+        lang = payload["lang"]
+        if lang not in ("de", "en", ""):
+            raise ValueError("lang must be de or en")
+        raw["lang"] = lang
     write_settings(conn, raw)
     return public_settings(raw)
 
@@ -255,7 +302,7 @@ def parse_day(value):
         day = datetime.strptime(value, "%Y-%m-%d")
     except ValueError:
         return None
-    start = datetime(day.year, day.month, day.day, tzinfo=TZ)
+    start = datetime(day.year, day.month, day.day, 12, tzinfo=TZ)
     return start, start + timedelta(days=1)
 
 
@@ -292,8 +339,27 @@ def flatten(value, prefix, out):
 
 
 def local_hour(ts_utc, day_start):
+    """Hours after noon. 0 is 12:00, 12 is midnight, 24 is the next 12:00."""
+    del day_start
     moment = parse_utc(ts_utc).astimezone(TZ)
-    return (moment - day_start).total_seconds() / 3600.0
+    minutes = (
+        moment.hour * 60
+        + moment.minute
+        + moment.second / 60.0
+        + moment.microsecond / 60000000.0
+    )
+    delta = minutes - 12 * 60
+    if delta < 0:
+        delta += 24 * 60
+    return delta / 60.0
+
+
+def chart_date(moment):
+    local = moment.astimezone(TZ)
+    day = local.date()
+    if local.hour < 12:
+        day -= timedelta(days=1)
+    return day
 
 
 def latest_message_iso(conn):
@@ -307,15 +373,15 @@ def list_days(conn):
     row = conn.execute("SELECT MIN(ts_utc), MAX(ts_utc) FROM messages").fetchone()
     if row[0] is None:
         return []
-    first = parse_utc(row[0]).astimezone(TZ).date()
-    last = parse_utc(row[1]).astimezone(TZ).date()
+    first = chart_date(parse_utc(row[0]))
+    last = chart_date(parse_utc(row[1]))
     found = []
     day = first
     while day <= last:
-        start = datetime(day.year, day.month, day.day, tzinfo=TZ)
+        start, end = parse_day(day.isoformat())
         hit = conn.execute(
             "SELECT 1 FROM messages WHERE ts_utc >= ? AND ts_utc < ? LIMIT 1",
-            (utc_iso(start), utc_iso(start + timedelta(days=1))),
+            (utc_iso(start), utc_iso(end)),
         ).fetchone()
         if hit:
             found.append(day.isoformat())

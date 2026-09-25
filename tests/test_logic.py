@@ -59,11 +59,13 @@ class LogicTest(unittest.TestCase):
         body = response.get_json()
         self.assertEqual(body["received"], 2)
         self.assertEqual(body["skipped"], 1)
-        self.assertEqual(body["series"]["temp"], [[0.5, 1.0]])
+        self.assertEqual(body["series"]["temp"], [[12.0, 2.0]])
         self.assertEqual(body["last_message"], "2026-09-25T00:00:00+02:00")
+        earlier = self.client.get("/api/data?date=2026-09-23").get_json()
+        self.assertEqual(earlier["series"]["temp"], [[12.5, 1.0]])
 
         days = self.client.get("/api/days").get_json()["days"]
-        self.assertEqual(days, ["2026-09-24", "2026-09-25"])
+        self.assertEqual(days, ["2026-09-23", "2026-09-24"])
 
     def test_winter_boundary_and_missing_day(self):
         collector.store_message(
@@ -72,9 +74,9 @@ class LogicTest(unittest.TestCase):
             json.dumps({"wind": 3}),
             "2026-01-14T23:30:00.000000+00:00",
         )
-        body = self.client.get("/api/data?date=2026-01-15").get_json()
-        self.assertEqual(body["series"]["wind"], [[0.5, 3.0]])
-        empty = self.client.get("/api/data?date=2026-01-16").get_json()
+        body = self.client.get("/api/data?date=2026-01-14").get_json()
+        self.assertEqual(body["series"]["wind"], [[12.5, 3.0]])
+        empty = self.client.get("/api/data?date=2026-01-15").get_json()
         self.assertEqual(empty["received"], 0)
         self.assertEqual(empty["series"], {})
         self.assertEqual(empty["last_message"], "2026-01-15T00:30:00+01:00")
@@ -82,6 +84,9 @@ class LogicTest(unittest.TestCase):
     def test_settings_roundtrip(self):
         defaults = self.client.get("/api/settings").get_json()
         self.assertEqual(defaults["order"], [])
+        self.assertEqual(defaults["hidden"], [])
+        self.assertEqual(defaults["lang"], "")
+        self.assertEqual(defaults["limits"]["clouds"]["ymin"], -40)
         clear = [line for line in defaults["limits"]["clouds"]["lines"] if line["id"] == "clear"][0]
         self.assertEqual(clear["value"], -15)
         saved = self.client.put(
@@ -100,8 +105,9 @@ class LogicTest(unittest.TestCase):
 
     def test_hour_uses_berlin_offset(self):
         start, _end = webapp.parse_day("2026-01-15")
-        hour = webapp.local_hour("2026-01-14T23:30:00.000000+00:00", start)
+        hour = webapp.local_hour("2026-01-15T11:30:00.000000+00:00", start)
         self.assertAlmostEqual(hour, 0.5)
+        self.assertEqual(start.hour, 12)
         self.assertIsNotNone(start.tzinfo)
         self.assertEqual(start + timedelta(days=1), webapp.parse_day("2026-01-15")[1])
         self.assertEqual(datetime(2026, 1, 15, tzinfo=webapp.TZ).utcoffset(), start.utcoffset())
