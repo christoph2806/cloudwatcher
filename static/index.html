@@ -220,13 +220,19 @@
     var settings = { order: [], hidden: [], lang: "", limits: {} };
     var lastPayload = null;
 
+    // Chart days run noon to noon, so before 12:00 "today" is the previous calendar date.
     function todayBerlin() {
-      return new Intl.DateTimeFormat("en-CA", {
+      var map = {};
+      new Intl.DateTimeFormat("en-CA", {
         timeZone: "Europe/Berlin",
         year: "numeric",
         month: "2-digit",
-        day: "2-digit"
-      }).format(new Date());
+        day: "2-digit",
+        hour: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(new Date()).forEach(function (part) { map[part.type] = part.value; });
+      var iso = map.year + "-" + map.month + "-" + map.day;
+      return Number(map.hour) < 12 ? shift(iso, -1) : iso;
     }
 
     function pad2(n) {

@@ -144,13 +144,22 @@
     var settings = { limits: {}, hidden: [], lang: "" };
     var fieldList = [];
 
+    // Chart days run noon to noon, so before 12:00 "today" is the previous calendar date.
     function todayBerlin() {
-      return new Intl.DateTimeFormat("en-CA", {
+      var map = {};
+      new Intl.DateTimeFormat("en-CA", {
         timeZone: "Europe/Berlin",
         year: "numeric",
         month: "2-digit",
-        day: "2-digit"
-      }).format(new Date());
+        day: "2-digit",
+        hour: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(new Date()).forEach(function (part) { map[part.type] = part.value; });
+      var iso = map.year + "-" + map.month + "-" + map.day;
+      if (Number(map.hour) >= 12) return iso;
+      var parts = iso.split("-").map(Number);
+      var dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] - 1));
+      return dt.toISOString().slice(0, 10);
     }
 
     function hiddenSet() {
